@@ -306,6 +306,15 @@
     </main>
 
     <script>
+        // =========================================================================
+        // 📌 ตั้งค่าลิงก์ไฟล์ CSV เริ่มต้นที่นี่
+        // =========================================================================
+        // หากคุณอัปโหลดไฟล์ CSV ไว้บนเว็บไซต์แล้ว ให้นำ URL หรือ ลิงก์ตรงมาใส่ในนี้
+        // ตัวอย่างเช่น: 'https://github.com/poom9417/AR-Dashboard-CNMI/blob/main/data_SAP_CNMI.csv'
+        // หรือถ้าอยู่บนเครื่อง ให้ใส่ชื่อไฟล์ไว้ตามเดิม เช่น 'data_SAP_CNMI.CSV'
+        const DEFAULT_CSV_URL = 'https://github.com/poom9417/AR-Dashboard-CNMI/blob/main/data_SAP_CNMI.csv';
+        // =========================================================================
+
         // Data Store
         let mainData = [];
         let currentData = [];
@@ -379,63 +388,49 @@
             }
         }
 
-        // โหลดข้อมูลด้วยการทำ Fallback ให้โหลด Mock Data หากโหลดไฟล์ไม่สำเร็จ
         function loadInitialData() {
-            const filePath = 'data_SAP_CNMI.CSV';
+            const filePath = DEFAULT_CSV_URL; // ดึงค่าจากตัวแปรด้านบนมาใช้
+            
             const overlay = document.getElementById('loading-overlay');
             const loadingText = document.getElementById('loading-text');
 
-            // --- ตรวจสอบ Environment ---
-            const isLocalOrPreview = window.location.protocol === 'blob:' || window.location.protocol === 'data:' || window.location.protocol === 'file:';
-
-            if (isLocalOrPreview) {
-                console.warn("ระบบตรวจพบการเปิดหน้าเว็บแบบ Preview หรือ Local File ระบบจะใช้ข้อมูลจำลอง (Mock Data) อัตโนมัติ");
-                loadMockDataFallback();
-                return;
-            }
-
             overlay.style.display = 'flex';
-            loadingText.textContent = 'กำลังดึงไฟล์เริ่มต้น...';
+            loadingText.textContent = 'กำลังพยายามโหลดข้อมูลไฟล์เริ่มต้น...';
 
-            try {
-                Papa.parse(filePath, {
-                    download: true,
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: (results) => {
-                        if (results.data && results.data.length > 0) {
-                            mainData = processCSVData(results.data); 
-                            currentData = [...mainData];
-                            updateTopStatusText(`เชื่อมต่อไฟล์: ${filePath}`, false);
-                            initFilters(); 
-                            handleFilterChange();
-                            overlay.style.display = 'none';
-                        } else {
-                            console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูล ระบบจะใช้ข้อมูลจำลองแทน");
-                            loadMockDataFallback();
-                        }
-                    },
-                    error: function(err) {
-                        console.warn("ไม่สามารถดึงไฟล์ได้: " + err.message + " ระบบจะใช้ข้อมูลจำลองแทน");
+            Papa.parse(filePath, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.data && results.data.length > 0) {
+                        mainData = processCSVData(results.data); 
+                        currentData = [...mainData];
+                        updateTopStatusText(`เชื่อมต่อไฟล์: สำเร็จ`, false);
+                        initFilters(); 
+                        handleFilterChange();
+                        overlay.style.display = 'none';
+                    } else {
+                        console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูล ระบบจะใช้ข้อมูลจำลองแทน");
                         loadMockDataFallback();
                     }
-                });
-            } catch (error) {
-                console.error("เกิดข้อผิดพลาดในการเรียก PapaParse:", error);
-                loadMockDataFallback();
-            }
+                },
+                error: function(err) {
+                    console.warn("ไม่สามารถดึงไฟล์ " + filePath + " ได้ (" + err.message + ") ระบบจะใช้ข้อมูลจำลองแทน");
+                    loadMockDataFallback();
+                }
+            });
 
             // ฟังก์ชันโหลดข้อมูลจำลอง
             function loadMockDataFallback() {
-                loadingText.textContent = 'กำลังสร้างข้อมูลจำลอง...';
+                loadingText.textContent = 'ไม่พบไฟล์ที่ระบุ (กำลังใช้ข้อมูลจำลองแทน)...';
                 setTimeout(() => {
                     mainData = generateMockData(500); // สร้างข้อมูลจำลอง 500 รายการ
                     currentData = [...mainData];
-                    updateTopStatusText('ใช้ข้อมูลจำลอง (Mock Data)', true);
+                    updateTopStatusText('ใช้ข้อมูลจำลอง (ไม่ได้ระบุลิงก์ไฟล์)', true);
                     initFilters();
                     handleFilterChange();
                     overlay.style.display = 'none';
-                }, 500); // ดีเลย์เล็กน้อยเพื่อให้เห็นว่ากำลังทำงาน
+                }, 500);
             }
         }
 
