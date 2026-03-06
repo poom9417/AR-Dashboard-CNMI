@@ -27,17 +27,19 @@
             display: none; flex-direction: column; justify-content: center; align-items: center;
         }
         .hidden { display: none !important; }
-        /* File Input Styling */
+        
+        /* Drag and Drop Zone */
         .file-drop-area {
             border: 2px dashed #cbd5e1;
             border-radius: 12px;
             padding: 20px;
             text-align: center;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
             background-color: #f8fafc;
             cursor: pointer;
         }
         .file-drop-area:hover { border-color: #3b82f6; background-color: #eff6ff; }
+        .file-drop-area.dragover { border-color: #2563eb; background-color: #dbeafe; transform: scale(1.02); }
         
         /* Table Styles */
         .table-pivot th, .table-pivot td { border: 1px solid #e2e8f0; padding: 10px; font-size: 0.85rem; }
@@ -45,7 +47,6 @@
         .row-remark-total { background-color: #eff6ff; font-weight: bold; color: #1e40af; border-top: 2px solid #bfdbfe; }
         .row-remark-header { background-color: #f1f5f9; font-weight: 700; color: #334155; }
         
-        /* Table A23 Styles */
         .table-a23 th, .table-a23 td { border: 1px solid #e2e8f0; padding: 8px; font-size: 0.85rem; vertical-align: middle; }
         .table-a23 thead th { background-color: #f8fafc; font-weight: 600; text-align: center; color: #475569; }
         
@@ -60,39 +61,29 @@
         .row-subtotal { background-color: #f1f5f9; font-weight: 700; border-top: 1px solid #cbd5e1; color: #334155; }
         .row-total { background-color: #e2e8f0; font-weight: 800; border-top: 2px solid #64748b; font-size: 0.9rem; color: #1e293b; }
         .faint-arrow { opacity: 0.15; font-size: 2rem; color: #64748b; transform: translateX(5px); }
-        .text-negative { color: #dc2626; } 
 
-        /* Filter Styles */
-        select option:disabled {
-            color: #cbd5e1;
-            background-color: #f8fafc;
-        }
+        select option:disabled { color: #cbd5e1; background-color: #f8fafc; }
         .active-tag {
-            background-color: #eff6ff;
-            color: #1e40af;
-            border: 1px solid #bfdbfe;
-            padding: 4px 12px;
-            border-radius: 9999px;
-            font-size: 0.85rem;
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
+            background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;
+            padding: 4px 12px; border-radius: 9999px; font-size: 0.85rem;
+            display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;
         }
         .active-tag:hover { background-color: #dbeafe; }
         .active-tag button { color: #60a5fa; cursor: pointer; padding: 2px; border-radius: 50%; }
         .active-tag button:hover { background-color: #bfdbfe; color: #1e3a8a; }
+
+        .chart-container { position: relative; width: 100%; max-width: 100%; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
+        @media (max-width: 640px) { .chart-container { height: 250px; } }
     </style>
 </head>
 <body class="text-slate-800">
 
-    <!-- Loading Overlay -->
     <div id="loading-overlay">
         <i class="fa-solid fa-circle-notch fa-spin text-5xl text-blue-600 mb-4"></i>
         <p class="text-xl font-bold text-slate-700" id="loading-text">กำลังประมวลผล...</p>
     </div>
 
-    <!-- Navbar -->
+    <!-- Navigation Bar -->
     <nav class="bg-white shadow-sm sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
@@ -101,21 +92,14 @@
                     <span class="font-bold text-xl text-slate-700 ml-2">AR Dashboard</span>
                 </div>
                 <div class="flex items-center space-x-3">
-                    <!-- Mode Toggle Button -->
                     <button id="btn-toggle-mode" onclick="toggleMode()" class="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center">
                         <i class="fa-solid fa-code-compare mr-2"></i> โหมดเปรียบเทียบรายงาน
                     </button>
 
-                    <span id="update-time" class="text-xs text-gray-500 hidden md:block border-l pl-3 ml-2">รอโหลดข้อมูล...</span>
+                    <span id="update-time" class="text-xs text-gray-500 hidden md:block border-l pl-3 ml-2">รอการอัปโหลดไฟล์...</span>
                     
-                    <!-- Fixed Google Sheet Refresh Button -->
-                    <button onclick="loadFixedGoogleSheet()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center shadow-md">
-                        <i class="fa-solid fa-sync-alt mr-2"></i> อัพเดทข้อมูล Sheet
-                    </button>
-
-                    <!-- Main Upload Button (Backup) -->
                     <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center shadow-md">
-                        <i class="fa-solid fa-folder-open mr-2"></i> CSV
+                        <i class="fa-solid fa-folder-open mr-2"></i> อัปโหลดไฟล์ CSV
                         <input type="file" id="csvInput" accept=".csv" class="hidden" />
                     </label>
                 </div>
@@ -123,11 +107,11 @@
         </div>
     </nav>
 
-    <!-- Main Content -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
-        <!-- Common Filters -->
+        <!-- Filter Section -->
         <section id="common-filters" class="mb-8">
+            <p class="text-sm text-gray-600 mb-2">ส่วนกรองข้อมูลนี้ช่วยให้คุณสามารถปรับเปลี่ยนมุมมองการวิเคราะห์ได้อย่างยืดหยุ่น</p>
             <div class="card bg-white p-6 rounded-xl shadow-sm border border-slate-100">
                 <div class="flex items-center justify-between mb-2">
                     <h2 class="text-lg font-semibold text-slate-700"><i class="fa-solid fa-filter mr-2"></i>ตัวกรองข้อมูล (Filters)</h2>
@@ -136,7 +120,6 @@
                     </button>
                 </div>
 
-                <!-- Active Filter Tags Display -->
                 <div id="active-filters-container" class="flex flex-wrap gap-2 mb-4 min-h-[2rem]">
                     <span class="text-sm text-gray-400 italic py-1">แสดงผลข้อมูลทั้งหมด (ยังไม่มีการกรอง)</span>
                 </div>
@@ -152,9 +135,9 @@
             </div>
         </section>
 
-        <!-- ======================= STANDARD MODE ======================= -->
+        <!-- View Standard Dashboard -->
         <div id="view-standard">
-            <!-- KPI Cards -->
+            
             <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 <div class="card border-l-4 border-blue-500 flex items-center justify-between">
                     <div><p class="text-sm text-gray-500 mb-1">ยอดลูกหนี้คงค้างรวม</p><h3 class="text-2xl font-bold text-slate-800" id="kpi-total-amount">0.00</h3></div>
@@ -170,33 +153,30 @@
                 </div>
             </section>
 
-            <!-- Year Chart -->
             <section class="mb-8">
                 <div class="card">
                     <h3 class="text-lg font-semibold mb-4 text-slate-700">ยอดลูกหนี้แยกตามปีงบประมาณ (Fiscal Year)</h3>
-                    <div class="relative h-72">
+                    <div class="chart-container">
                         <canvas id="chartYear"></canvas>
                     </div>
                 </div>
             </section>
 
-            <!-- Standard Charts -->
             <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                 <div class="card">
                     <h3 class="text-lg font-semibold mb-4 text-slate-700">ยอดลูกหนี้แยกตามสิทธิ (5 อันดับแรก)</h3>
-                    <div class="relative h-72">
+                    <div class="chart-container">
                         <canvas id="chartPrivilege"></canvas>
                     </div>
                 </div>
                 <div class="card">
                     <h3 class="text-lg font-semibold mb-4 text-slate-700">สัดส่วนตามกลุ่มสถานะ</h3>
-                    <div class="relative h-72 flex justify-center">
+                    <div class="chart-container flex justify-center">
                         <canvas id="chartStatusGroup"></canvas>
                     </div>
                 </div>
             </section>
             
-            <!-- Pivot Table 1: Remark > Status -->
             <section class="card mb-8">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold text-slate-700">สรุปยอดตามสถานะ (Remark > Status Name)</h3>
@@ -209,7 +189,6 @@
                 </div>
             </section>
 
-            <!-- Pivot Table 2: Main Status (A01, A35, Z06, Others) -->
             <section class="card mb-8">
                 <div class="flex justify-between items-center mb-4">
                     <h3 class="text-lg font-semibold text-slate-700">สรุปยอดตามสถานะหลัก</h3>
@@ -220,39 +199,34 @@
                         <tbody id="table-body-main-status" class="bg-white"></tbody>
                     </table>
                 </div>
-                <div class="text-xs text-gray-500 mt-2 p-2 bg-gray-50 rounded">
-                    <span class="font-bold">หมายเหตุ:</span> ช่อง "ก่อน 2568" รวมยอดจากปีงบประมาณ 2567 และปีก่อนหน้าทั้งหมด
-                </div>
             </section>
-
         </div>
 
-        <!-- ======================= COMPARISON MODE ======================= -->
+        <!-- View Comparison Mode -->
         <div id="view-comparison" class="hidden">
             
-            <!-- Step 1: Selection -->
             <div id="comp-step-select" class="card bg-indigo-50 border border-indigo-100 p-8 rounded-xl text-center">
                 <h2 class="text-2xl font-bold text-indigo-900 mb-2">เปรียบเทียบข้อมูลรายงาน</h2>
-                <p class="text-indigo-600 mb-8">อัปโหลดไฟล์รายงาน 2 ฉบับ เพื่อนำมาเปรียบเทียบหาความเปลี่ยนแปลง</p>
+                <p class="text-indigo-600 mb-8">คลิกเลือกไฟล์ หรือ <b>ลากไฟล์ CSV มาวาง (Drag & Drop)</b> เพื่อนำมาเปรียบเทียบหาความเปลี่ยนแปลง</p>
                 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                    <!-- File A -->
                     <div class="bg-white p-6 rounded-xl shadow-sm border-2 border-transparent hover:border-blue-400 transition-colors">
                         <div class="bg-blue-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600 text-xl font-bold">A</div>
                         <h3 class="font-bold text-gray-800 mb-2">ไฟล์ก่อนหน้า (Previous)</h3>
-                        <label class="file-drop-area block">
+                        <label id="drop-zone-a" class="file-drop-area block">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 mb-2 block"></i>
                             <span class="text-sm text-gray-500 block mb-1" id="file-a-name">ยังไม่ได้เลือกไฟล์</span>
-                            <span class="text-xs text-blue-600 font-semibold">คลิกเพื่อเลือกไฟล์ CSV</span>
+                            <span class="text-xs text-blue-600 font-semibold">คลิก หรือ ลากไฟล์มาวางที่นี่</span>
                             <input type="file" id="input-file-a" accept=".csv" class="hidden" onchange="updateFileName(this, 'file-a-name')">
                         </label>
                     </div>
-                    <!-- File B -->
                     <div class="bg-white p-6 rounded-xl shadow-sm border-2 border-transparent hover:border-orange-400 transition-colors">
                         <div class="bg-orange-100 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 text-orange-600 text-xl font-bold">B</div>
                         <h3 class="font-bold text-gray-800 mb-2">ไฟล์ปัจจุบัน (Current)</h3>
-                        <label class="file-drop-area block">
+                        <label id="drop-zone-b" class="file-drop-area block">
+                            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-400 mb-2 block"></i>
                             <span class="text-sm text-gray-500 block mb-1" id="file-b-name">ยังไม่ได้เลือกไฟล์</span>
-                            <span class="text-xs text-orange-600 font-semibold">คลิกเพื่อเลือกไฟล์ CSV</span>
+                            <span class="text-xs text-orange-600 font-semibold">คลิก หรือ ลากไฟล์มาวางที่นี่</span>
                             <input type="file" id="input-file-b" accept=".csv" class="hidden" onchange="updateFileName(this, 'file-b-name')">
                         </label>
                     </div>
@@ -264,9 +238,7 @@
                 </div>
             </div>
 
-            <!-- Step 2: Result Dashboard -->
             <div id="comp-step-result" class="hidden">
-                <!-- Header -->
                 <div class="bg-gradient-to-r from-slate-800 to-slate-700 text-white p-6 rounded-xl shadow-md mb-6 flex flex-col md:flex-row justify-between items-center">
                     <div>
                         <h3 class="text-xl font-bold mb-1"><i class="fa-solid fa-code-compare mr-2"></i>ผลการเปรียบเทียบ</h3>
@@ -281,15 +253,12 @@
                     </button>
                 </div>
 
-                <!-- Big Summaries -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                     <div class="card border border-gray-200 relative overflow-hidden">
                         <h4 class="text-sm text-gray-500 font-semibold mb-4 text-center">ยอดลูกหนี้รวม (Total Amount)</h4>
                         <div class="flex items-center justify-center space-x-8 relative z-10">
                             <div class="text-right"><p class="text-xs text-gray-400">ก่อนหน้า</p><p class="text-xl font-bold text-gray-700" id="res-amt-a">0</p></div>
-                            <div class="flex flex-col items-center">
-                                <i class="fa-solid fa-arrow-right-long faint-arrow"></i>
-                            </div>
+                            <div class="flex flex-col items-center"><i class="fa-solid fa-arrow-right-long faint-arrow"></i></div>
                             <div class="text-left"><p class="text-xs text-gray-400">ปัจจุบัน</p><p class="text-xl font-bold text-gray-700" id="res-amt-b">0</p></div>
                         </div>
                         <div class="mt-4 text-center"><span id="res-amt-badge" class="px-4 py-1.5 rounded-full text-sm font-bold bg-gray-100 flex items-center justify-center w-fit mx-auto">...</span></div>
@@ -298,69 +267,48 @@
                         <h4 class="text-sm text-gray-500 font-semibold mb-4 text-center">จำนวนราย (Total Cases)</h4>
                         <div class="flex items-center justify-center space-x-8 relative z-10">
                             <div class="text-right"><p class="text-xs text-gray-400">ก่อนหน้า</p><p class="text-xl font-bold text-gray-700" id="res-cnt-a">0</p></div>
-                            <div class="flex flex-col items-center">
-                                <i class="fa-solid fa-arrow-right-long faint-arrow"></i>
-                            </div>
+                            <div class="flex flex-col items-center"><i class="fa-solid fa-arrow-right-long faint-arrow"></i></div>
                             <div class="text-left"><p class="text-xs text-gray-400">ปัจจุบัน</p><p class="text-xl font-bold text-gray-700" id="res-cnt-b">0</p></div>
                         </div>
                         <div class="mt-4 text-center"><span id="res-cnt-badge" class="px-4 py-1.5 rounded-full text-sm font-bold bg-gray-100 flex items-center justify-center w-fit mx-auto">...</span></div>
                     </div>
                 </div>
 
-                <!-- Top 5 Status Change Table -->
                 <section class="card mb-8">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-semibold text-slate-700">5 อันดับสถานะที่มีการเปลี่ยนแปลงสูงสุด (Top 5 Changes by Status Name)</h3>
+                        <h3 class="text-lg font-semibold text-slate-700">5 อันดับสถานะที่มีการเปลี่ยนแปลงสูงสุด</h3>
                     </div>
-                    <div id="top-status-diff-table-container" class="overflow-x-auto table-container">
-                        <!-- Table injected here -->
-                    </div>
-                    <div class="text-xs text-gray-500 mt-2">
-                        <span class="font-bold">หมายเหตุ:</span> แสดงผลต่าง (ยอดปัจจุบัน - ยอดก่อนหน้า), เรียงตามค่าสัมบูรณ์ของการเปลี่ยนแปลงรวม
-                    </div>
+                    <div id="top-status-diff-table-container" class="overflow-x-auto table-container"></div>
                 </section>
 
-                <!-- Charts -->
                 <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
                     <div class="card">
                         <h3 class="text-lg font-semibold mb-4 text-slate-700">เปรียบเทียบ: ยอดลูกหนี้แยกตามสิทธิ</h3>
-                        <div class="relative h-80">
-                            <canvas id="compChartPrivilege"></canvas>
-                        </div>
+                        <div class="chart-container"><canvas id="compChartPrivilege"></canvas></div>
                     </div>
                     <div class="card">
                         <h3 class="text-lg font-semibold mb-4 text-slate-700">เปรียบเทียบ: ยอดลูกหนี้แยกตามกลุ่มสถานะ</h3>
-                        <div class="relative h-80">
-                            <canvas id="compChartGroup"></canvas>
-                        </div>
+                        <div class="chart-container"><canvas id="compChartGroup"></canvas></div>
                     </div>
                 </section>
 
-                <!-- Comparison Year Chart -->
                 <section class="mb-8">
                     <div class="card">
                         <h3 class="text-lg font-semibold mb-4 text-slate-700">เปรียบเทียบ: ยอดลูกหนี้แยกตามปีงบประมาณ</h3>
-                        <div class="relative h-80">
-                            <canvas id="compChartYear"></canvas>
-                        </div>
+                        <div class="chart-container"><canvas id="compChartYear"></canvas></div>
                     </div>
                 </section>
 
-                <!-- A23 Table -->
                 <section class="mb-8">
                     <div class="card overflow-hidden">
                         <div class="flex justify-between items-center mb-4">
                             <h3 class="text-lg font-semibold text-slate-700">ตารางข้อมูลตามสิทธิ</h3>
                         </div>
-                        <!-- ID Added for Capture -->
                         <div id="table-a23-container" class="overflow-x-auto table-container p-2 bg-white">
                             <table class="table-a23 w-full border-collapse">
                                 <thead id="table-a23-head"></thead>
                                 <tbody id="table-a23-body"></tbody>
                             </table>
-                        </div>
-                        <div class="text-xs text-gray-500 mt-3 p-2 bg-gray-50 rounded">
-                            <span class="font-bold">หมายเหตุ:</span> ช่อง "ก่อน 2568" รวมยอดจากปีงบประมาณ 2567 และปีก่อนหน้าทั้งหมด
                         </div>
                     </div>
                 </section>
@@ -370,97 +318,139 @@
     </main>
 
     <script>
-        // HARDCODED GOOGLE SHEET URL
-        const FIXED_GSHEET_URL = './data_SAP_CNMI.csv';
-
-        let mainData = [], currentData = [], isComparisonMode = false;
-        let compDataA = { name: '', data: [] }, compDataB = { name: '', data: [] }; 
-        const COLOR_PALETTE = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#06b6d4'];
+        // Data Store
+        let mainData = [];
+        let currentData = [];
+        let isComparisonMode = false;
         
-        // Define filters and their display names for tags
+        let compDataA = { name: '', data: [] };
+        let compDataB = { name: '', data: [] };
+
+        const COLOR_PALETTE = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#06b6d4'];
+        let charts = {}; 
+
+        // Filter Definitions
         const filterKeys = ['fiscalYear', 'patientType', 'privilege', 'statusGroup', 'statusName', 'remark'];
         const filterLabels = {
-            'fiscalYear': 'ปีงบประมาณ',
-            'patientType': 'ประเภทผู้ป่วย',
-            'privilege': 'สิทธิ',
-            'statusGroup': 'กลุ่มสถานะ',
-            'statusName': 'ชื่อสถานะ',
-            'remark': 'หมายเหตุ'
+            'fiscalYear': 'ปีงบประมาณ', 'patientType': 'ประเภทผู้ป่วย', 'privilege': 'สิทธิ', 
+            'statusGroup': 'กลุ่มสถานะ', 'statusName': 'ชื่อสถานะ', 'remark': 'หมายเหตุ'
         };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            if(window.ChartDataLabels) Chart.register(ChartDataLabels);
+        window.onload = () => {
+            if(window.ChartDataLabels) { Chart.register(ChartDataLabels); }
+            Chart.defaults.font.family = "'Sarabun', sans-serif";
             
-            // Auto Load Fixed Google Sheet on startup
-            loadFixedGoogleSheet();
+            mainData = [];
+            currentData = [];
             
+            // สั่งโหลดไฟล์เริ่มต้นทันที
+            loadInitialData();
+            
+            // Event Listeners
             filterKeys.forEach(id => {
-                const el = document.getElementById(`filter-${id}`); if (el) el.addEventListener('change', handleFilterChange);
+                const el = document.getElementById(`filter-${id}`);
+                if (el) el.addEventListener('change', handleFilterChange);
             });
-            const mainInput = document.getElementById('csvInput'); if (mainInput) mainInput.addEventListener('change', handleMainFileUpload);
-        });
 
-        // --- Google Sheet Logic ---
-        async function loadFixedGoogleSheet() {
+            const mainInput = document.getElementById('csvInput');
+            if (mainInput) mainInput.addEventListener('change', handleMainFileUpload);
+
+            setupDragAndDrop('drop-zone-a', 'input-file-a', 'file-a-name');
+            setupDragAndDrop('drop-zone-b', 'input-file-b', 'file-b-name');
+        };
+
+        function loadInitialData() {
+            const filePath = 'data_SAP_CNMI.CSV';
             const overlay = document.getElementById('loading-overlay');
+            const loadingText = document.getElementById('loading-text');
+
+            // --- ตรวจสอบ Environment เพื่อป้องกัน XMLHttpRequest Error ---
+            // ถ้ารันผ่านหน้า Preview ของ AI (blob:) หรือรันไฟล์ HTML จากเครื่องตรงๆ (file:) 
+            // จะไม่อนุญาตให้ PapaParse ใช้ download: true (เพราะจะติดเรื่อง CORS หรือ Invalid URL)
+            if (window.location.protocol === 'blob:' || window.location.protocol === 'data:' || window.location.protocol === 'file:') {
+                console.warn("ข้ามการโหลดไฟล์อัตโนมัติเนื่องจากรันในโหมด Preview หรือ Local File");
+                
+                const ut = document.getElementById('update-time');
+                if (ut) { 
+                    ut.classList.remove('hidden'); 
+                    ut.innerHTML = `<span class="text-orange-500 bg-orange-50 px-2 py-1 rounded"><i class="fa-solid fa-triangle-exclamation text-xs mr-1"></i>รอการอัปโหลดไฟล์ (โหมดพรีวิว)</span>`; 
+                }
+                
+                // จบการทำงานฟังก์ชันนี้ ปล่อยให้ผู้ใช้อัปโหลดด้วยตนเองผ่าน UI
+                return;
+            }
+
+            // ถ้าเป็นเว็บ Server จริงๆ ให้ทำการดึงไฟล์
             overlay.style.display = 'flex';
-            document.getElementById('loading-text').innerText = 'กำลังดึงข้อมูลล่าสุดจาก Google Sheet...';
+            loadingText.textContent = 'กำลังโหลดข้อมูลเริ่มต้น...';
 
             try {
-                // Add timestamp to prevent caching
-                const fetchUrl = FIXED_GSHEET_URL + '&t=' + new Date().getTime();
-                
-                const response = await fetch(fetchUrl);
-                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-                const csvText = await response.text();
-                
-                Papa.parse(csvText, {
+                Papa.parse(filePath, {
+                    download: true,
                     header: true,
                     skipEmptyLines: true,
                     complete: (results) => {
-                        if (results.data.length > 0) {
-                            mainData = processCSVData(results.data);
+                        if (results.data && results.data.length > 0) {
+                            mainData = processCSVData(results.data); 
                             currentData = [...mainData];
                             
-                            // UI Updates
-                            document.getElementById('update-time').innerHTML = `<span class="text-green-600 font-bold"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>Google Sheet (Live)</span>`;
+                            const ut = document.getElementById('update-time');
+                            if (ut) { 
+                                ut.classList.remove('hidden'); 
+                                ut.innerHTML = `<span class="text-green-600 font-bold bg-green-50 px-2 py-1 rounded"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>เชื่อมต่อไฟล์: ${filePath}</span>`; 
+                            }
                             
-                            initFilters();
+                            initFilters(); 
                             handleFilterChange();
-                            
-                            // Show toast/alert briefly
-                            const toast = document.createElement('div');
-                            toast.className = 'fixed bottom-4 right-4 bg-green-600 text-white px-6 py-3 rounded-lg shadow-lg z-[3000] animate-bounce';
-                            toast.innerHTML = '<i class="fa-solid fa-check-circle mr-2"></i> อัพเดทข้อมูล Sheet สำเร็จ';
-                            document.body.appendChild(toast);
-                            setTimeout(() => toast.remove(), 3000);
-
                         } else {
-                            alert("ไม่พบข้อมูลใน Google Sheet ไฟล์อาจจะว่างเปล่า");
+                            console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูลในไฟล์ หรือไฟล์ผิดฟอร์แมต");
                         }
                         overlay.style.display = 'none';
+                        loadingText.textContent = 'กำลังประมวลผล...';
                     },
-                    error: (err) => {
-                        throw err;
+                    error: function(err) {
+                        console.log("ไม่สามารถดึงไฟล์เริ่มต้นได้:", err.message);
+                        overlay.style.display = 'none';
+                        loadingText.textContent = 'กำลังประมวลผล...';
+                        
+                        const ut = document.getElementById('update-time');
+                        if (ut) { 
+                            ut.classList.remove('hidden'); 
+                            ut.innerHTML = `<span class="text-orange-500 bg-orange-50 px-2 py-1 rounded"><i class="fa-solid fa-triangle-exclamation text-xs mr-1"></i>ไม่พบไฟล์ตั้งต้น</span>`; 
+                        }
                     }
                 });
-            } catch (err) {
-                console.error("Fetch Error:", err);
-                alert("เกิดข้อผิดพลาดในการเชื่อมต่อ Sheet ระบบจะใช้ข้อมูลตัวอย่าง (Mock Data) แทน\n\nError: " + err.message);
-                
-                // Fallback
-                mainData = generateMockData(200); currentData = [...mainData]; 
-                document.getElementById('update-time').innerHTML = `<span class="text-gray-500">ข้อมูล: Mock Data</span>`;
-                initFilters(); 
-                handleFilterChange();
+            } catch (error) {
+                console.error("เกิดข้อผิดพลาดในการเรียก PapaParse:", error);
                 overlay.style.display = 'none';
             }
         }
 
+        function setupDragAndDrop(dropZoneId, inputId, labelId) {
+            const dropZone = document.getElementById(dropZoneId);
+            const input = document.getElementById(inputId);
+            if(!dropZone || !input) return;
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => { dropZone.addEventListener(eventName, preventDefaults, false); });
+            function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+
+            ['dragenter', 'dragover'].forEach(eventName => { dropZone.addEventListener(eventName, () => { dropZone.classList.add('dragover'); }, false); });
+            ['dragleave', 'drop'].forEach(eventName => { dropZone.addEventListener(eventName, () => { dropZone.classList.remove('dragover'); }, false); });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer; const files = dt.files;
+                if(files && files.length > 0) { input.files = files; updateFileName(input, labelId); }
+            }, false);
+        }
+
+        // --- Core UI Functions ---
         function toggleMode() {
             isComparisonMode = !isComparisonMode;
             const btn = document.getElementById('btn-toggle-mode');
-            const viewStd = document.getElementById('view-standard'), viewComp = document.getElementById('view-comparison'), filters = document.getElementById('common-filters');
+            const viewStd = document.getElementById('view-standard');
+            const viewComp = document.getElementById('view-comparison');
+            const filters = document.getElementById('common-filters');
+
             if (isComparisonMode) {
                 btn.innerHTML = '<i class="fa-solid fa-arrow-left mr-2"></i> กลับสู่หน้าหลัก';
                 btn.className = "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center";
@@ -492,17 +482,19 @@
 
         async function startComparison() {
             const inputA = document.getElementById('input-file-a'), inputB = document.getElementById('input-file-b');
-            if (!inputA.files[0] || !inputB.files[0]) { alert("กรุณาเลือกไฟล์ทั้งสองครับ"); return; }
+            if (!inputA.files[0] || !inputB.files[0]) { alert("กรุณาเลือกไฟล์ทั้งสองครับ (A และ B)"); return; }
+            
             const overlay = document.getElementById('loading-overlay'); overlay.style.display = 'flex';
             try {
                 const [resA, resB] = await Promise.all([readCSVFile(inputA.files[0]), readCSVFile(inputB.files[0])]);
                 compDataA = { name: inputA.files[0].name, data: resA }; compDataB = { name: inputB.files[0].name, data: resB };
-                
                 populateFilters([...resA, ...resB]); 
                 renderComparisonResult();
                 updateDynamicFilters(getFilterValues(), [...resA, ...resB]);
 
-                document.getElementById('comp-step-select').classList.add('hidden'); document.getElementById('comp-step-result').classList.remove('hidden'); document.getElementById('common-filters').classList.remove('hidden');
+                document.getElementById('comp-step-select').classList.add('hidden');
+                document.getElementById('comp-step-result').classList.remove('hidden');
+                document.getElementById('common-filters').classList.remove('hidden');
             } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); } finally { overlay.style.display = 'none'; }
         }
 
@@ -512,82 +504,43 @@
             const filteredA = filterData(compDataA.data, filters), filteredB = filterData(compDataB.data, filters);
             const sumA = filteredA.reduce((s, i) => s + i.amount, 0), sumB = filteredB.reduce((s, i) => s + i.amount, 0);
             const cntA = filteredA.reduce((s, i) => s + i.count, 0), cntB = filteredB.reduce((s, i) => s + i.count, 0);
+            
             updateSummaryCard('res-amt', sumA, sumB, true); updateSummaryCard('res-cnt', cntA, cntB, false);
             renderCompChart('compChartPrivilege', 'privilege', filteredA, filteredB, "ก่อนหน้า", "ปัจจุบัน");
             renderCompChart('compChartGroup', 'statusGroup', filteredA, filteredB, "ก่อนหน้า", "ปัจจุบัน");
             renderCompChart('compChartYear', 'fiscalYear', filteredA, filteredB, "ก่อนหน้า", "ปัจจุบัน");
             renderTableA23(filteredA, filteredB);
-            renderTopStatusChangeTable(filteredA, filteredB);
+            renderTopStatusChangeTable(filteredA, filteredB); 
         }
 
         function renderTopStatusChangeTable(dataA, dataB) {
-            const statusMap = {};
-            const buckets = ['2569', '2568', 'Pre']; 
-
-            const getBucket = (y) => {
-                const year = parseInt(y);
-                if (isNaN(year)) return 'Pre';
-                if (year === 2569 || year === 2026) return '2569';
-                if (year === 2568 || year === 2025) return '2568';
-                return 'Pre'; 
-            };
-
+            const statusMap = {}; const buckets = ['2569', '2568', 'Pre']; 
+            const getBucket = (y) => { const year = parseInt(y); if (isNaN(year)) return 'Pre'; if (year === 2569 || year === 2026) return '2569'; if (year === 2568 || year === 2025) return '2568'; return 'Pre'; };
+            
             const process = (data, factor) => {
                 data.forEach(d => {
-                    const s = d.statusName || 'Unknown';
-                    const yRaw = d.fiscalYear || '0';
-                    const bucket = getBucket(yRaw);
-                    const amt = d.amount || 0;
-                    
+                    const s = d.statusName || 'Unknown'; const bucket = getBucket(d.fiscalYear || '0'); const amt = d.amount || 0;
                     if (!statusMap[s]) statusMap[s] = { totalDiff: 0, bucketDiff: { '2569': 0, '2568': 0, 'Pre': 0 } };
-                    
-                    statusMap[s].totalDiff += (amt * factor);
-                    statusMap[s].bucketDiff[bucket] += (amt * factor);
+                    statusMap[s].totalDiff += (amt * factor); statusMap[s].bucketDiff[bucket] += (amt * factor);
                 });
             };
-
-            process(dataA, -1);
-            process(dataB, 1);
-
-            const sortedStatus = Object.entries(statusMap)
-                .sort((a, b) => Math.abs(b[1].totalDiff) - Math.abs(a[1].totalDiff))
-                .slice(0, 5); 
-
-            const container = document.getElementById('top-status-diff-table-container');
-            if(!container) return;
             
-            let html = `<table class="min-w-full divide-y divide-gray-200 border-collapse bg-white text-sm">`;
+            process(dataA, -1); process(dataB, 1);
+            const sortedStatus = Object.entries(statusMap).sort((a, b) => Math.abs(b[1].totalDiff) - Math.abs(a[1].totalDiff)).slice(0, 5); 
+            const container = document.getElementById('top-status-diff-table-container'); if(!container) return;
             
-            html += `<thead class="bg-gray-50"><tr>`;
-            html += `<th class="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider border">สถานะ (Status Name)</th>`;
-            
-            html += `<th class="px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider border">2569</th>`;
-            html += `<th class="px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider border">2568</th>`;
-            html += `<th class="px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider border">ก่อน 2568</th>`;
-            
-            html += `<th class="px-4 py-3 text-right font-bold text-gray-700 uppercase tracking-wider border bg-gray-100">รวมผลต่างสุทธิ</th>`;
-            html += `</tr></thead>`;
-
-            html += `<tbody class="divide-y divide-gray-200">`;
+            let html = `<table class="min-w-full divide-y divide-gray-200 border-collapse bg-white text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider border">สถานะ (Status Name)</th><th class="px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider border">2569</th><th class="px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider border">2568</th><th class="px-4 py-3 text-right font-medium text-gray-500 uppercase tracking-wider border">ก่อน 2568</th><th class="px-4 py-3 text-right font-bold text-gray-700 uppercase tracking-wider border bg-gray-100">รวมผลต่างสุทธิ</th></tr></thead><tbody class="divide-y divide-gray-200">`;
             sortedStatus.forEach(([status, data]) => {
-                html += `<tr class="hover:bg-gray-50">`;
-                html += `<td class="px-4 py-3 font-medium text-gray-900 border">${status}</td>`;
-                
+                html += `<tr class="hover:bg-gray-50"><td class="px-4 py-3 font-medium text-gray-900 border">${status}</td>`;
                 buckets.forEach(b => {
-                    const val = data.bucketDiff[b] || 0;
-                    const displayVal = val === 0 ? '-' : formatCurrency(val);
+                    const val = data.bucketDiff[b] || 0; const displayVal = val === 0 ? '-' : formatCurrency(val);
                     const textColor = val > 0 ? 'text-red-600' : (val < 0 ? 'text-green-600' : 'text-gray-400');
                     html += `<td class="px-4 py-3 text-right border ${textColor}">${val > 0 ? '+' : ''}${displayVal}</td>`;
                 });
-
-                const total = data.totalDiff;
-                const totalColor = total > 0 ? 'text-red-700' : (total < 0 ? 'text-green-700' : 'text-gray-500');
-                html += `<td class="px-4 py-3 text-right font-bold border bg-gray-50 ${totalColor}">${total > 0 ? '+' : ''}${formatCurrency(total)}</td>`;
-                html += `</tr>`;
+                const total = data.totalDiff; const totalColor = total > 0 ? 'text-red-700' : (total < 0 ? 'text-green-700' : 'text-gray-500');
+                html += `<td class="px-4 py-3 text-right font-bold border bg-gray-50 ${totalColor}">${total > 0 ? '+' : ''}${formatCurrency(total)}</td></tr>`;
             });
-            html += `</tbody></table>`;
-            
-            container.innerHTML = html;
+            container.innerHTML = html + `</tbody></table>`;
         }
 
         function updateSummaryCard(prefix, valA, valB, isCurrency) {
@@ -595,21 +548,13 @@
             document.getElementById(`${prefix}-a`).textContent = isCurrency ? formatCurrency(valA) : formatNumber(valA);
             document.getElementById(`${prefix}-b`).textContent = isCurrency ? formatCurrency(valB) : formatNumber(valB);
             const badge = document.getElementById(`${prefix}-badge`);
-            if (diff > 0) { 
-                badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-red-50 text-red-700 border border-red-100"; 
-                badge.innerHTML = `<i class="fa-solid fa-caret-up mr-2"></i>+${formatNumber(diff)} (${formatNumber(pct.toFixed(2))}%)`; 
-            } else if (diff < 0) { 
-                badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-green-50 text-green-700 border border-green-100"; 
-                badge.innerHTML = `<i class="fa-solid fa-caret-down mr-2"></i>${formatNumber(diff)} (${formatNumber(Math.abs(pct).toFixed(2))}%)`; 
-            } else { 
-                badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-gray-50 text-gray-600 border border-gray-100"; 
-                badge.innerHTML = "เท่าเดิม"; 
-            }
+            if (diff > 0) { badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-red-50 text-red-700 border border-red-100"; badge.innerHTML = `<i class="fa-solid fa-caret-up mr-2"></i>+${formatNumber(diff)} (${formatNumber(pct.toFixed(2))}%)`; } 
+            else if (diff < 0) { badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-green-50 text-green-700 border border-green-100"; badge.innerHTML = `<i class="fa-solid fa-caret-down mr-2"></i>${formatNumber(diff)} (${formatNumber(Math.abs(pct).toFixed(2))}%)`; } 
+            else { badge.className = "px-4 py-1.5 rounded-full text-sm font-bold bg-gray-50 text-gray-600 border border-gray-100"; badge.innerHTML = "เท่าเดิม"; }
         }
 
         function renderTableA23(dataA, dataB) {
             const thead = document.getElementById('table-a23-head'), tbody = document.getElementById('table-a23-body');
-            
             thead.innerHTML = `<tr><th rowspan="2" class="w-48 bg-slate-100 border">สิทธิ (Privilege)</th><th rowspan="2" class="w-24 bg-slate-100 border">ประเภท</th><th colspan="4" class="bg-blue-100 text-blue-800 border border-blue-200">เดือนก่อน</th><th colspan="4" class="bg-orange-100 text-orange-800 border border-orange-200">ปัจจุบัน</th><th rowspan="2" class="w-32 bg-slate-100 border">การเปลี่ยนแปลง</th></tr><tr><th class="text-xs text-blue-700 bg-blue-50 border border-blue-200">2569</th><th class="text-xs text-blue-700 bg-blue-50 border border-blue-200">2568</th><th class="text-xs text-blue-700 bg-blue-50 border border-blue-200">ก่อน 2568</th><th class="text-xs text-blue-900 bg-blue-200 border border-blue-300 font-bold">รวม</th><th class="text-xs text-orange-700 bg-orange-50 border border-orange-200">2569</th><th class="text-xs text-orange-700 bg-orange-50 border border-orange-200">2568</th><th class="text-xs text-orange-700 bg-orange-50 border border-orange-200">ก่อน 2568</th><th class="text-xs text-orange-900 bg-orange-200 border border-orange-300 font-bold">รวม</th></tr>`;
             tbody.innerHTML = '';
 
@@ -655,19 +600,30 @@
             tbody.appendChild(trTotal);
         }
 
-        // --- Main Controller Functions ---
+        // --- Data Handling ---
         function handleMainFileUpload(event) {
             const file = event.target.files[0]; if (!file) return;
             const overlay = document.getElementById('loading-overlay'); overlay.style.display = 'flex';
+            
             Papa.parse(file, {
                 header: true, skipEmptyLines: true,
                 complete: (results) => {
                     if (results.data.length > 0) {
-                        mainData = processCSVData(results.data); currentData = [...mainData];
-                        document.getElementById('update-time').textContent = `ข้อมูล: ${file.name}`;
-                        initFilters(); 
-                        handleFilterChange();
+                        mainData = processCSVData(results.data); 
+                        currentData = [...mainData];
+                        const ut = document.getElementById('update-time');
+                        if (ut) { 
+                            ut.classList.remove('hidden'); 
+                            ut.innerHTML = `<span class="text-green-600 font-bold"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>อัปโหลดไฟล์: ${file.name}</span>`; 
+                        }
+                        initFilters(); handleFilterChange();
+                    } else {
+                        alert("คำเตือน: โหลดไฟล์สำเร็จ แต่ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง");
                     }
+                    overlay.style.display = 'none';
+                },
+                error: function(err) {
+                    alert("เกิดข้อผิดพลาดในการอ่านไฟล์: " + err.message);
                     overlay.style.display = 'none';
                 }
             });
@@ -681,29 +637,38 @@
             const keys = { fy: ['FYDDate','ปีงบประมาณ','Year'], pt: ['Ref.key 1','ประเภทผู้ป่วย'], pv: ['Ref.key 2','สิทธิ'], sg: ['Status Name Group'], sn: ['Status Name'], rm: ['Remark'], amt: ['Amount','จำนวนเงิน'], cnt: ['count','Count'] };
             const getVal = (r, kList) => { for(let k of kList) if(r[k]!==undefined) return r[k]; return '-'; };
             const parseYear = (v) => { if(!v || v==='-') return '-'; if(String(v).includes('/')) return String(v).split('/').find(s=>s.length===4)||v; return v; };
-            return rawData.map(r => ({
+            
+            let processed = rawData.map(r => ({
                 fiscalYear: parseYear(getVal(r, keys.fy)), patientType: getVal(r, keys.pt), privilege: getVal(r, keys.pv),
                 statusGroup: getVal(r, keys.sg), statusName: getVal(r, keys.sn), remark: getVal(r, keys.rm),
                 amount: parseFloat(String(getVal(r, keys.amt)).replace(/,/g,''))||0, count: parseFloat(String(getVal(r, keys.cnt)).replace(/,/g,''))||1
             }));
+            
+            return processed.filter(item => item.fiscalYear !== '-' || item.patientType !== '-' || item.amount !== 0);
         }
 
-        let charts = {};
+        // --- Chart & Render ---
         function renderCompChart(id, k, dA, dB, lA, lB) {
             if(charts[id]) charts[id].destroy(); const ctx=document.getElementById(id).getContext('2d');
             const agg=(d)=>{const r={};d.forEach(i=>r[i[k]]=(r[i[k]]||0)+i.amount);return r;};
-            const aA=agg(dA), aB=agg(dB);
-            let ks=[...new Set([...Object.keys(aA),...Object.keys(aB)])];
-            
+            const aA=agg(dA), aB=agg(dB); let ks=[...new Set([...Object.keys(aA),...Object.keys(aB)])];
             if (k === 'fiscalYear') { ks.sort().reverse(); } else { ks.sort(); }
-
-            charts[id]=new Chart(ctx,{type:'bar',data:{labels:ks,datasets:[{label:lA,data:ks.map(i=>aA[i]||0),backgroundColor:'#3b82f6'},{label:lB,data:ks.map(i=>aB[i]||0),backgroundColor:'#f97316'}]},
-            options:{responsive:true,maintainAspectRatio:false,plugins:{datalabels:{display:false}}}});
+            charts[id]=new Chart(ctx,{type:'bar',data:{labels:ks,datasets:[{label:lA,data:ks.map(i=>aA[i]||0),backgroundColor:'#3b82f6'},{label:lB,data:ks.map(i=>aB[i]||0),backgroundColor:'#f97316'}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{datalabels:{display:false}}}});
         }
+
         function renderStdChart(id, t, d, c, opts={}) {
             if(charts[id]) charts[id].destroy(); const ctx=document.getElementById(id).getContext('2d');
-            charts[id]=new Chart(ctx,{type:t,data:{labels:d.map(x=>x[0]),datasets:[{label:'ยอดลูกหนี้',data:d.map(x=>x[1]),backgroundColor:c,borderWidth:1}]},
-            options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:t!=='bar'},datalabels:{display:false}},...opts}});
+            
+            if (!d || d.length === 0) {
+                charts[id] = new Chart(ctx, { 
+                    type: 'bar', 
+                    data: { labels: ['ไม่มีข้อมูล'], datasets: [{ data: [0], backgroundColor: '#e2e8f0' }] }, 
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { y: { display: false }, x: { display: false } } } 
+                });
+                return;
+            }
+
+            charts[id]=new Chart(ctx,{type:t,data:{labels:d.map(x=>x[0]),datasets:[{label:'ยอดลูกหนี้',data:d.map(x=>x[1]),backgroundColor:c,borderWidth:1}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:t!=='bar'},datalabels:{display:false}},...opts}});
         }
         
         function renderDashboard() {
@@ -711,25 +676,23 @@
             const agg=(k)=>{const r={};currentData.forEach(i=>r[i[k]]=(r[i[k]]||0)+i.amount);return Object.entries(r).sort((a,b)=>b[1]-a[1]);};
             renderStdChart('chartPrivilege','bar',agg('privilege').slice(0,5),'#3b82f6');
             renderStdChart('chartStatusGroup','doughnut',agg('statusGroup'),COLOR_PALETTE);
-            renderStdChart('chartYear', 'bar', agg('fiscalYear').sort().reverse(), '#8b5cf6', {
-                layout: { padding: { top: 40 } },
-                plugins: {
-                    legend: { display: false },
-                    datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v) => formatCurrency(v), font: { weight: 'bold' }, color: '#6b21a8' }
-                }
-            });
-            renderPivotTable();
+            renderStdChart('chartYear', 'bar', agg('fiscalYear').sort().reverse(), '#8b5cf6', { layout: { padding: { top: 40 } }, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v) => formatCurrency(v), font: { weight: 'bold' }, color: '#6b21a8' } } });
+            renderPivotTable(); 
             renderMainStatusTable();
         }
 
         function renderPivotTable() {
-            const tbody = document.getElementById('table-body-pivot');
-            const thead = document.getElementById('table-head-pivot');
+            const tbody = document.getElementById('table-body-pivot'), thead = document.getElementById('table-head-pivot');
             tbody.innerHTML = ''; thead.innerHTML = '';
 
             const years = [...new Set(currentData.map(d => d.fiscalYear))].sort().reverse();
+            if (years.length === 0) {
+                thead.innerHTML = '<tr><th class="px-4 py-2 bg-slate-100 border text-center">รายละเอียด (Remark > Status Name)</th><th class="px-4 py-2 bg-slate-100 border text-right">รวมทั้งหมด</th></tr>';
+                tbody.innerHTML = '<tr><td colspan="2" class="px-4 py-8 border text-center text-gray-400">ยังไม่มีข้อมูลสำหรับแสดงผล</td></tr>';
+                return;
+            }
+
             const tree = {}; const remarkTotals = {};
-            
             currentData.forEach(item => {
                 const r = item.remark || '-'; const n = item.statusName || '-'; const y = item.fiscalYear || '-'; const amt = item.amount;
                 if(!tree[r]) tree[r] = {}; if(!tree[r][n]) tree[r][n] = {};
@@ -739,95 +702,77 @@
 
             let headHtml = '<tr><th class="px-4 py-2 bg-slate-100 border text-left w-1/3">รายละเอียด (Remark > Status Name)</th>';
             years.forEach(y => headHtml += `<th class="px-4 py-2 bg-slate-100 border text-right">${y}</th>`);
-            headHtml += '<th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>';
-            thead.innerHTML = headHtml;
+            headHtml += '<th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>'; thead.innerHTML = headHtml;
 
             Object.keys(tree).sort().forEach(remark => {
                 let trHeader = document.createElement('tr'); trHeader.className = 'row-remark-header';
-                trHeader.innerHTML = `<td class="px-4 py-2 border" colspan="${years.length + 2}">${remark}</td>`;
-                tbody.appendChild(trHeader);
+                trHeader.innerHTML = `<td class="px-4 py-2 border" colspan="${years.length + 2}">${remark}</td>`; tbody.appendChild(trHeader);
 
                 Object.keys(tree[remark]).sort().forEach(name => {
                     let trN = document.createElement('tr'); trN.className = 'hover:bg-gray-50';
-                    let nHtml = `<td class="px-4 py-2 border pl-8 text-sm text-gray-700">${name}</td>`;
-                    let grandTotalN = 0;
+                    let nHtml = `<td class="px-4 py-2 border pl-8 text-sm text-gray-700">${name}</td>`; let grandTotalN = 0;
                     years.forEach(y => { const val = tree[remark][name][y] || 0; grandTotalN += val; nHtml += `<td class="px-4 py-2 border text-right text-sm">${val !== 0 ? formatCurrency(val) : '-'}</td>`; });
-                    nHtml += `<td class="px-4 py-2 border text-right text-sm font-semibold">${formatCurrency(grandTotalN)}</td>`;
-                    trN.innerHTML = nHtml; tbody.appendChild(trN);
+                    nHtml += `<td class="px-4 py-2 border text-right text-sm font-semibold">${formatCurrency(grandTotalN)}</td>`; trN.innerHTML = nHtml; tbody.appendChild(trN);
                 });
 
                 let trR = document.createElement('tr'); trR.className = 'row-remark-total';
                 let rowHtml = `<td class="px-4 py-2 border text-right">รวม (${remark})</td>`; let grandTotalR = 0;
                 years.forEach(y => { const val = remarkTotals[remark][y] || 0; grandTotalR += val; rowHtml += `<td class="px-4 py-2 border text-right">${formatCurrency(val)}</td>`; });
-                rowHtml += `<td class="px-4 py-2 border text-right bg-blue-100">${formatCurrency(grandTotalR)}</td>`;
-                trR.innerHTML = rowHtml; tbody.appendChild(trR);
+                rowHtml += `<td class="px-4 py-2 border text-right bg-blue-100">${formatCurrency(grandTotalR)}</td>`; trR.innerHTML = rowHtml; tbody.appendChild(trR);
             });
         }
 
         function renderMainStatusTable() {
-            const tbody = document.getElementById('table-body-main-status'); const thead = document.getElementById('table-head-main-status');
+            const tbody = document.getElementById('table-body-main-status'), thead = document.getElementById('table-head-main-status');
             tbody.innerHTML = ''; thead.innerHTML = '';
+            
+            thead.innerHTML = `<tr><th class="px-4 py-2 bg-slate-100 border text-left w-1/3">สถานะหลัก</th><th class="px-4 py-2 bg-slate-100 border text-right">2569</th><th class="px-4 py-2 bg-slate-100 border text-right">2568</th><th class="px-4 py-2 bg-slate-100 border text-right">ก่อน 2568</th><th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>`;
 
-            const categories = {
-                'A01': { label: 'A01 : รายได้เข้าไม่ครบ', filter: (s) => s.includes('A01') },
-                'A35': { label: 'A35 : ค่ารักษาพยาบาลเข้ามาหลังเรียกเก็บ', filter: (s) => s.includes('A35') },
-                'Z06': { label: 'Z06 : รายได้ทับซ้อน IPD/OPD', filter: (s) => s.includes('Z06') },
-                'Others': { label: 'อื่นๆ', filter: (s) => !s.includes('A01') && !s.includes('A35') && !s.includes('Z06') }
-            };
+            if (currentData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 border text-center text-gray-400">ยังไม่มีข้อมูลสำหรับแสดงผล</td></tr>';
+                return;
+            }
 
+            const categories = { 'A01': { label: 'A01 : รายได้เข้าไม่ครบ', filter: (s) => s.includes('A01') }, 'A35': { label: 'A35 : ค่ารักษาพยาบาลเข้ามาหลังเรียกเก็บ', filter: (s) => s.includes('A35') }, 'Z06': { label: 'Z06 : รายได้ทับซ้อน IPD/OPD', filter: (s) => s.includes('Z06') }, 'Others': { label: 'อื่นๆ', filter: (s) => !s.includes('A01') && !s.includes('A35') && !s.includes('Z06') } };
             const groupedData = {}; Object.keys(categories).forEach(key => { groupedData[key] = { '2569': 0, '2568': 0, 'Pre': 0, 'Total': 0 }; });
             const grandTotals = { '2569': 0, '2568': 0, 'Pre': 0, 'Total': 0 };
 
             currentData.forEach(item => {
                 const status = item.statusName || ''; let year = parseInt(item.fiscalYear); if (isNaN(year)) year = 0; const amt = item.amount;
                 let key = 'Others'; for (const [catKey, catDef] of Object.entries(categories)) { if (catKey !== 'Others' && catDef.filter(status)) { key = catKey; break; } }
-
-                if (year === 2569 || year === 2026) { groupedData[key]['2569'] += amt; grandTotals['2569'] += amt; }
-                else if (year === 2568 || year === 2025) { groupedData[key]['2568'] += amt; grandTotals['2568'] += amt; }
-                else if ((year > 0 && year < 2568 && year > 2400) || (year < 2025 && year > 0)) { groupedData[key]['Pre'] += amt; grandTotals['Pre'] += amt; }
+                if (year === 2569 || year === 2026) { groupedData[key]['2569'] += amt; grandTotals['2569'] += amt; } else if (year === 2568 || year === 2025) { groupedData[key]['2568'] += amt; grandTotals['2568'] += amt; } else if ((year > 0 && year < 2568 && year > 2400) || (year < 2025 && year > 0)) { groupedData[key]['Pre'] += amt; grandTotals['Pre'] += amt; }
                 groupedData[key]['Total'] = groupedData[key]['2569'] + groupedData[key]['2568'] + groupedData[key]['Pre'];
             });
-            
             grandTotals['Total'] = grandTotals['2569'] + grandTotals['2568'] + grandTotals['Pre'];
-
-            let headHtml = `<tr><th class="px-4 py-2 bg-slate-100 border text-left w-1/3">สถานะหลัก</th><th class="px-4 py-2 bg-slate-100 border text-right">2569</th><th class="px-4 py-2 bg-slate-100 border text-right">2568</th><th class="px-4 py-2 bg-slate-100 border text-right">ก่อน 2568</th><th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>`;
-            thead.innerHTML = headHtml;
 
             Object.keys(categories).forEach(key => {
                 const tr = document.createElement('tr');
-                let rowHtml = `<td class="px-4 py-2 border font-medium text-sm">${categories[key].label}</td>`;
-                rowHtml += `<td class="px-4 py-2 border text-right text-sm">${formatNumber(groupedData[key]['2569'])}</td>`;
-                rowHtml += `<td class="px-4 py-2 border text-right text-sm">${formatNumber(groupedData[key]['2568'])}</td>`;
-                rowHtml += `<td class="px-4 py-2 border text-right text-sm">${formatNumber(groupedData[key]['Pre'])}</td>`;
-                rowHtml += `<td class="px-4 py-2 border text-right bg-blue-50 font-bold text-sm text-blue-900">${formatNumber(groupedData[key]['Total'])}</td>`;
-                tr.innerHTML = rowHtml; tbody.appendChild(tr);
+                tr.innerHTML = `<td class="px-4 py-2 border font-medium text-sm">${categories[key].label}</td><td class="px-4 py-2 border text-right text-sm">${formatNumber(groupedData[key]['2569'])}</td><td class="px-4 py-2 border text-right text-sm">${formatNumber(groupedData[key]['2568'])}</td><td class="px-4 py-2 border text-right text-sm">${formatNumber(groupedData[key]['Pre'])}</td><td class="px-4 py-2 border text-right bg-blue-50 font-bold text-sm text-blue-900">${formatNumber(groupedData[key]['Total'])}</td>`;
+                tbody.appendChild(tr);
             });
-
             const trTotal = document.createElement('tr'); trTotal.className = 'row-total';
-            let totalHtml = `<td class="px-4 py-2 border text-center">รวมทั้งสิ้น</td>`;
-            totalHtml += `<td class="px-4 py-2 border text-right">${formatNumber(grandTotals['2569'])}</td>`;
-            totalHtml += `<td class="px-4 py-2 border text-right">${formatNumber(grandTotals['2568'])}</td>`;
-            totalHtml += `<td class="px-4 py-2 border text-right">${formatNumber(grandTotals['Pre'])}</td>`;
-            totalHtml += `<td class="px-4 py-2 border text-right bg-blue-100 text-blue-900">${formatNumber(grandTotals['Total'])}</td>`;
-            trTotal.innerHTML = totalHtml; tbody.appendChild(trTotal);
+            trTotal.innerHTML = `<td class="px-4 py-2 border text-center">รวมทั้งสิ้น</td><td class="px-4 py-2 border text-right">${formatNumber(grandTotals['2569'])}</td><td class="px-4 py-2 border text-right">${formatNumber(grandTotals['2568'])}</td><td class="px-4 py-2 border text-right">${formatNumber(grandTotals['Pre'])}</td><td class="px-4 py-2 border text-right bg-blue-100 text-blue-900">${formatNumber(grandTotals['Total'])}</td>`;
+            tbody.appendChild(trTotal);
         }
 
         function updateKPIs() {
+            if (currentData.length === 0) {
+                document.getElementById('kpi-total-amount').textContent = '0.00'; document.getElementById('kpi-total-cases').textContent = '0';
+                document.getElementById('kpi-top-status').textContent = '-'; document.getElementById('kpi-top-status-amt').textContent = '';
+                return;
+            }
             const sum = currentData.reduce((a,b)=>a+b.amount,0); const cnt = currentData.reduce((a,b)=>a+b.count,0);
             const grps = {}; currentData.forEach(i => grps[i.statusName] = (grps[i.statusName]||0) + i.amount);
             let top = '-', topVal = 0; if(Object.keys(grps).length){ top = Object.keys(grps).reduce((a,b)=>grps[a]>grps[b]?a:b); topVal = grps[top]; }
-            document.getElementById('kpi-total-amount').textContent = formatCurrency(sum);
-            document.getElementById('kpi-total-cases').textContent = formatNumber(cnt);
-            document.getElementById('kpi-top-status').textContent = top;
-            document.getElementById('kpi-top-status-amt').textContent = `(ยอด: ${formatCurrency(topVal)})`;
+            document.getElementById('kpi-total-amount').textContent = formatCurrency(sum); document.getElementById('kpi-total-cases').textContent = formatNumber(cnt);
+            document.getElementById('kpi-top-status').textContent = top; document.getElementById('kpi-top-status-amt').textContent = `(ยอด: ${formatCurrency(topVal)})`;
         }
 
+        // --- Filters Logic ---
         function initFilters(){ populateFilters(mainData); }
-
         function populateFilters(d){
             filterKeys.forEach(k => {
-                const s = document.getElementById(`filter-${k}`); const currentVal = s.value;
-                s.innerHTML = '<option value="all">ทั้งหมด</option>';
+                const s = document.getElementById(`filter-${k}`); const currentVal = s.value; s.innerHTML = '<option value="all">ทั้งหมด</option>';
                 [...new Set(d.map(i => i[k]))].sort().forEach(v => { const o = document.createElement('option'); o.value = v; o.text = v; s.appendChild(o); });
                 if(s.querySelector(`option[value="${currentVal}"]`)) s.value = currentVal;
             });
@@ -835,21 +780,25 @@
 
         function handleFilterChange() {
             const filters = getFilterValues();
-            if(isComparisonMode) { renderComparisonResult(); updateDynamicFilters(filters, [...compDataA.data, ...compDataB.data]); } 
-            else { currentData = filterData(mainData, filters); renderDashboard(); updateDynamicFilters(filters, mainData); }
+            if(isComparisonMode) { 
+                renderComparisonResult(); 
+                updateDynamicFilters(filters, [...compDataA.data, ...compDataB.data]); 
+            } else { 
+                currentData = filterData(mainData, filters); 
+                renderDashboard(); 
+                updateDynamicFilters(filters, mainData); 
+            }
             renderActiveTags(filters);
         }
 
         function updateDynamicFilters(currentFilters, sourceData) {
             filterKeys.forEach(targetKey => {
                 const otherFilters = { ...currentFilters }; otherFilters[targetKey] = 'all'; 
-                const validDataForTarget = filterData(sourceData, otherFilters);
-                const validValues = new Set(validDataForTarget.map(item => item[targetKey]));
+                const validDataForTarget = filterData(sourceData, otherFilters); const validValues = new Set(validDataForTarget.map(item => item[targetKey]));
                 const selectEl = document.getElementById(`filter-${targetKey}`);
                 Array.from(selectEl.options).forEach(option => {
                     if (option.value === 'all') return; 
-                    if (validValues.has(option.value)) { option.disabled = false; option.style.color = ''; } 
-                    else { option.disabled = true; option.style.color = '#cbd5e1'; }
+                    if (validValues.has(option.value)) { option.disabled = false; option.style.color = ''; } else { option.disabled = true; option.style.color = '#cbd5e1'; }
                 });
             });
         }
@@ -876,23 +825,8 @@
             renderActiveTags(getFilterValues());
         }
 
-        function generateMockData(c){
-            const y=['2567','2568','2569'],t=['OPD','IPD'],p=['GGO','LGO','ONHSI','Self Pay'], s = ['A01 : รายได้เข้าไม่ครบ', 'A35 : ค่ารักษาพยาบาลเข้ามาหลังเรียกเก็บ', 'Z06 : รายได้ทับซ้อน IPD/OPD', 'B01 : อื่นๆ', 'Pending'], remarks = ['ปกติ', 'เร่งด่วน', 'รอตรวจสอบ'];
-            let d=[];
-            for(let i=0;i<c;i++){
-                const year = y[Math.floor(Math.random()*y.length)]; let status = s[Math.floor(Math.random()*s.length)];
-                if (status === 'Pending' && year === '2567') status = 'A01 : รายได้เข้าไม่ครบ'; 
-                d.push({ fiscalYear: year, patientType: t[i%2], privilege: p[i%4], statusGroup: status === 'Pending' ? 'ค้างชำระ (Pending)' : 'ปิดบัญชีแล้ว', statusName: status, remark: remarks[Math.floor(Math.random() * remarks.length)], amount: Math.floor(Math.random()*100000), count: 1 });
-            }
-            return d;
-        }
-
         function formatNumber(n){return n.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});}
         function formatCurrency(n){return n.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});}
     </script>
 </body>
-
 </html>
-
-
-
