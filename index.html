@@ -29,15 +29,7 @@
         .hidden { display: none !important; }
         
         /* Drag and Drop Zone */
-        .file-drop-area {
-            border: 2px dashed #cbd5e1;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            transition: all 0.3s ease;
-            background-color: #f8fafc;
-            cursor: pointer;
-        }
+        .file-drop-area { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px; text-align: center; transition: all 0.3s ease; background-color: #f8fafc; cursor: pointer; }
         .file-drop-area:hover { border-color: #3b82f6; background-color: #eff6ff; }
         .file-drop-area.dragover { border-color: #2563eb; background-color: #dbeafe; transform: scale(1.02); }
         
@@ -63,11 +55,7 @@
         .faint-arrow { opacity: 0.15; font-size: 2rem; color: #64748b; transform: translateX(5px); }
 
         select option:disabled { color: #cbd5e1; background-color: #f8fafc; }
-        .active-tag {
-            background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe;
-            padding: 4px 12px; border-radius: 9999px; font-size: 0.85rem;
-            display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;
-        }
+        .active-tag { background-color: #eff6ff; color: #1e40af; border: 1px solid #bfdbfe; padding: 4px 12px; border-radius: 9999px; font-size: 0.85rem; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; }
         .active-tag:hover { background-color: #dbeafe; }
         .active-tag button { color: #60a5fa; cursor: pointer; padding: 2px; border-radius: 50%; }
         .active-tag button:hover { background-color: #bfdbfe; color: #1e3a8a; }
@@ -340,49 +328,74 @@
             if(window.ChartDataLabels) { Chart.register(ChartDataLabels); }
             Chart.defaults.font.family = "'Sarabun', sans-serif";
             
-            mainData = [];
-            currentData = [];
+            mainData = []; currentData = [];
             
             // สั่งโหลดไฟล์เริ่มต้นทันที
             loadInitialData();
             
             // Event Listeners
-            filterKeys.forEach(id => {
-                const el = document.getElementById(`filter-${id}`);
-                if (el) el.addEventListener('change', handleFilterChange);
-            });
+            filterKeys.forEach(id => { const el = document.getElementById(`filter-${id}`); if (el) el.addEventListener('change', handleFilterChange); });
+            const mainInput = document.getElementById('csvInput'); if (mainInput) mainInput.addEventListener('change', handleMainFileUpload);
 
-            const mainInput = document.getElementById('csvInput');
-            if (mainInput) mainInput.addEventListener('change', handleMainFileUpload);
-
-            setupDragAndDrop('drop-zone-a', 'input-file-a', 'file-a-name');
-            setupDragAndDrop('drop-zone-b', 'input-file-b', 'file-b-name');
+            setupDragAndDrop('drop-zone-a', 'input-file-a', 'file-a-name'); setupDragAndDrop('drop-zone-b', 'input-file-b', 'file-b-name');
         };
 
+        // ฟังก์ชันสร้าง Mock Data สำหรับใช้กรณีโหลดไฟล์ไม่ได้
+        function generateMockData(c) {
+            const y = ['2567', '2568', '2569'];
+            const t = ['OPD', 'IPD'];
+            const p = ['GGO', 'LGO', 'ONHSI', 'Self Pay', 'ISSI'];
+            const s = ['A01 : รายได้เข้าไม่ครบ', 'A35 : ค่ารักษาพยาบาลเข้ามาหลังเรียกเก็บ', 'Z06 : รายได้ทับซ้อน IPD/OPD', 'B01 : อื่นๆ', 'Pending'];
+            const remarks = ['ปกติ', 'เร่งด่วน', 'รอตรวจสอบ', 'อยู่ระหว่างประมวลผล'];
+            
+            let d = [];
+            for(let i=0; i<c; i++) {
+                const year = y[Math.floor(Math.random()*y.length)]; 
+                let status = s[Math.floor(Math.random()*s.length)];
+                if (status === 'Pending' && year === '2567') status = 'A01 : รายได้เข้าไม่ครบ'; 
+                
+                d.push({ 
+                    fiscalYear: year, 
+                    patientType: t[i%2], 
+                    privilege: p[i%5], 
+                    statusGroup: status === 'Pending' ? 'ค้างชำระ (Pending)' : 'ปิดบัญชีแล้ว', 
+                    statusName: status, 
+                    remark: remarks[Math.floor(Math.random() * remarks.length)], 
+                    amount: Math.floor(Math.random()*50000) + 1000,
+                    count: 1
+                });
+            }
+            return d;
+        }
+
+        function updateTopStatusText(text, isMock = false) {
+            const ut = document.getElementById('update-time');
+            if (!ut) return;
+            ut.classList.remove('hidden');
+            if (isMock) {
+                ut.innerHTML = `<span class="text-orange-600 font-bold bg-orange-50 px-2 py-1 rounded border border-orange-200" title="อัปโหลดไฟล์ CSV เพื่อดูข้อมูลจริง"><i class="fa-solid fa-vial text-xs mr-1"></i>${text}</span>`;
+            } else {
+                ut.innerHTML = `<span class="text-green-600 font-bold bg-green-50 px-2 py-1 rounded"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>${text}</span>`;
+            }
+        }
+
+        // โหลดข้อมูลด้วยการทำ Fallback ให้โหลด Mock Data หากโหลดไฟล์ไม่สำเร็จ
         function loadInitialData() {
             const filePath = 'data_SAP_CNMI.CSV';
             const overlay = document.getElementById('loading-overlay');
             const loadingText = document.getElementById('loading-text');
 
-            // --- ตรวจสอบ Environment เพื่อป้องกัน XMLHttpRequest Error ---
-            // ถ้ารันผ่านหน้า Preview ของ AI (blob:) หรือรันไฟล์ HTML จากเครื่องตรงๆ (file:) 
-            // จะไม่อนุญาตให้ PapaParse ใช้ download: true (เพราะจะติดเรื่อง CORS หรือ Invalid URL)
-            if (window.location.protocol === 'blob:' || window.location.protocol === 'data:' || window.location.protocol === 'file:') {
-                console.warn("ข้ามการโหลดไฟล์อัตโนมัติเนื่องจากรันในโหมด Preview หรือ Local File");
-                
-                const ut = document.getElementById('update-time');
-                if (ut) { 
-                    ut.classList.remove('hidden'); 
-                    ut.innerHTML = `<span class="text-orange-500 bg-orange-50 px-2 py-1 rounded"><i class="fa-solid fa-triangle-exclamation text-xs mr-1"></i>รอการอัปโหลดไฟล์ (โหมดพรีวิว)</span>`; 
-                }
-                
-                // จบการทำงานฟังก์ชันนี้ ปล่อยให้ผู้ใช้อัปโหลดด้วยตนเองผ่าน UI
+            // --- ตรวจสอบ Environment ---
+            const isLocalOrPreview = window.location.protocol === 'blob:' || window.location.protocol === 'data:' || window.location.protocol === 'file:';
+
+            if (isLocalOrPreview) {
+                console.warn("ระบบตรวจพบการเปิดหน้าเว็บแบบ Preview หรือ Local File ระบบจะใช้ข้อมูลจำลอง (Mock Data) อัตโนมัติ");
+                loadMockDataFallback();
                 return;
             }
 
-            // ถ้าเป็นเว็บ Server จริงๆ ให้ทำการดึงไฟล์
             overlay.style.display = 'flex';
-            loadingText.textContent = 'กำลังโหลดข้อมูลเริ่มต้น...';
+            loadingText.textContent = 'กำลังดึงไฟล์เริ่มต้น...';
 
             try {
                 Papa.parse(filePath, {
@@ -393,36 +406,36 @@
                         if (results.data && results.data.length > 0) {
                             mainData = processCSVData(results.data); 
                             currentData = [...mainData];
-                            
-                            const ut = document.getElementById('update-time');
-                            if (ut) { 
-                                ut.classList.remove('hidden'); 
-                                ut.innerHTML = `<span class="text-green-600 font-bold bg-green-50 px-2 py-1 rounded"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>เชื่อมต่อไฟล์: ${filePath}</span>`; 
-                            }
-                            
+                            updateTopStatusText(`เชื่อมต่อไฟล์: ${filePath}`, false);
                             initFilters(); 
                             handleFilterChange();
+                            overlay.style.display = 'none';
                         } else {
-                            console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูลในไฟล์ หรือไฟล์ผิดฟอร์แมต");
+                            console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูล ระบบจะใช้ข้อมูลจำลองแทน");
+                            loadMockDataFallback();
                         }
-                        overlay.style.display = 'none';
-                        loadingText.textContent = 'กำลังประมวลผล...';
                     },
                     error: function(err) {
-                        console.log("ไม่สามารถดึงไฟล์เริ่มต้นได้:", err.message);
-                        overlay.style.display = 'none';
-                        loadingText.textContent = 'กำลังประมวลผล...';
-                        
-                        const ut = document.getElementById('update-time');
-                        if (ut) { 
-                            ut.classList.remove('hidden'); 
-                            ut.innerHTML = `<span class="text-orange-500 bg-orange-50 px-2 py-1 rounded"><i class="fa-solid fa-triangle-exclamation text-xs mr-1"></i>ไม่พบไฟล์ตั้งต้น</span>`; 
-                        }
+                        console.warn("ไม่สามารถดึงไฟล์ได้: " + err.message + " ระบบจะใช้ข้อมูลจำลองแทน");
+                        loadMockDataFallback();
                     }
                 });
             } catch (error) {
                 console.error("เกิดข้อผิดพลาดในการเรียก PapaParse:", error);
-                overlay.style.display = 'none';
+                loadMockDataFallback();
+            }
+
+            // ฟังก์ชันโหลดข้อมูลจำลอง
+            function loadMockDataFallback() {
+                loadingText.textContent = 'กำลังสร้างข้อมูลจำลอง...';
+                setTimeout(() => {
+                    mainData = generateMockData(500); // สร้างข้อมูลจำลอง 500 รายการ
+                    currentData = [...mainData];
+                    updateTopStatusText('ใช้ข้อมูลจำลอง (Mock Data)', true);
+                    initFilters();
+                    handleFilterChange();
+                    overlay.style.display = 'none';
+                }, 500); // ดีเลย์เล็กน้อยเพื่อให้เห็นว่ากำลังทำงาน
             }
         }
 
@@ -611,11 +624,7 @@
                     if (results.data.length > 0) {
                         mainData = processCSVData(results.data); 
                         currentData = [...mainData];
-                        const ut = document.getElementById('update-time');
-                        if (ut) { 
-                            ut.classList.remove('hidden'); 
-                            ut.innerHTML = `<span class="text-green-600 font-bold"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>อัปโหลดไฟล์: ${file.name}</span>`; 
-                        }
+                        updateTopStatusText(`อัปโหลดไฟล์: ${file.name}`, false);
                         initFilters(); handleFilterChange();
                     } else {
                         alert("คำเตือน: โหลดไฟล์สำเร็จ แต่ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง");
