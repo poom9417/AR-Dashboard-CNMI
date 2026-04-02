@@ -87,7 +87,7 @@
                     <span id="update-time" class="text-xs text-gray-500 hidden md:block border-l pl-3 ml-2">รอการอัปโหลดไฟล์...</span>
                     
                     <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center shadow-md">
-                        <i class="fa-solid fa-folder-open mr-2"></i> อัปโหลดไฟล์ CSV
+                        <i class="fa-solid fa-folder-open mr-2"></i> อัปโหลดไฟล์ CSV อื่น
                         <input type="file" id="csvInput" accept=".csv" class="hidden" />
                     </label>
                 </div>
@@ -309,11 +309,9 @@
         // =========================================================================
         // 📌 ตั้งค่าลิงก์ไฟล์ CSV เริ่มต้นที่นี่
         // =========================================================================
-        // หากคุณอัปโหลดไฟล์ CSV ไว้บนเว็บไซต์แล้ว ให้นำ URL หรือ ลิงก์ตรงมาใส่ในนี้
-        // ตัวอย่างเช่น: 'https://github.com/poom9417/AR-Dashboard-CNMI/blob/main/data_SAP_CNMI.csv'
-        // หรือถ้าอยู่บนเครื่อง ให้ใส่ชื่อไฟล์ไว้ตามเดิม เช่น 'data_SAP_CNMI.CSV'
-        const DEFAULT_CSV_URL = 'https://raw.githubusercontent.com/poom9417/AR-Dashboard-CNMI/main/data_SAP_CNMI.csv';
+        const DEFAULT_CSV_URL = 'data_SAP_CNMI.CSV';
         // =========================================================================
+
         // Data Store
         let mainData = [];
         let currentData = [];
@@ -388,7 +386,7 @@
         }
 
         function loadInitialData() {
-            const filePath = DEFAULT_CSV_URL; // ดึงค่าจากตัวแปรด้านบนมาใช้
+            const filePath = DEFAULT_CSV_URL; 
             
             const overlay = document.getElementById('loading-overlay');
             const loadingText = document.getElementById('loading-text');
@@ -618,7 +616,11 @@
                     if (results.data.length > 0) {
                         mainData = processCSVData(results.data); 
                         currentData = [...mainData];
-                        updateTopStatusText(`อัปโหลดไฟล์: ${file.name}`, false);
+                        const ut = document.getElementById('update-time');
+                        if (ut) { 
+                            ut.classList.remove('hidden'); 
+                            ut.innerHTML = `<span class="text-green-600 font-bold"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>อัปโหลดไฟล์: ${file.name}</span>`; 
+                        }
                         initFilters(); handleFilterChange();
                     } else {
                         alert("คำเตือน: โหลดไฟล์สำเร็จ แต่ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง");
@@ -636,19 +638,39 @@
             return new Promise((resolve) => Papa.parse(file, { header: true, skipEmptyLines: true, complete: (r) => resolve(r.data.length ? processCSVData(r.data) : []) }));
         }
 
+        // =======================================================
+        // 📌 จุดแก้ไขเรื่องปี พ.ศ. อยู่ที่นี่ครับ
+        // =======================================================
         function processCSVData(rawData) {
             const keys = { fy: ['FYDDate','ปีงบประมาณ','Year'], pt: ['Ref.key 1','ประเภทผู้ป่วย'], pv: ['Ref.key 2','สิทธิ'], sg: ['Status Name Group'], sn: ['Status Name'], rm: ['Remark'], amt: ['Amount','จำนวนเงิน'], cnt: ['count','Count'] };
             const getVal = (r, kList) => { for(let k of kList) if(r[k]!==undefined) return r[k]; return '-'; };
-            const parseYear = (v) => { if(!v || v==='-') return '-'; if(String(v).includes('/')) return String(v).split('/').find(s=>s.length===4)||v; return v; };
+            
+            // ฟังก์ชันแปลงปีเป็น พ.ศ.
+            const parseYearToBE = (v) => { 
+                if(!v || v==='-') return '-'; 
+                let str = String(v);
+                if(str.includes('/')) str = str.split('/').find(s=>s.length===4)||str; 
+                
+                let num = parseInt(str, 10);
+                // เช็คว่าเป็นตัวเลข ค.ศ. หรือไม่ (ปกติ ค.ศ. จะอยู่ในช่วง 1900 - 2400)
+                // ถ้าใช่ ให้บวก 543 ทันที
+                if (!isNaN(num) && num > 1900 && num < 2400) {
+                    return String(num + 543);
+                }
+                
+                return str; 
+            };
             
             let processed = rawData.map(r => ({
-                fiscalYear: parseYear(getVal(r, keys.fy)), patientType: getVal(r, keys.pt), privilege: getVal(r, keys.pv),
+                fiscalYear: parseYearToBE(getVal(r, keys.fy)), // ใช้ฟังก์ชันใหม่ตรงนี้
+                patientType: getVal(r, keys.pt), privilege: getVal(r, keys.pv),
                 statusGroup: getVal(r, keys.sg), statusName: getVal(r, keys.sn), remark: getVal(r, keys.rm),
                 amount: parseFloat(String(getVal(r, keys.amt)).replace(/,/g,''))||0, count: parseFloat(String(getVal(r, keys.cnt)).replace(/,/g,''))||1
             }));
             
             return processed.filter(item => item.fiscalYear !== '-' || item.patientType !== '-' || item.amount !== 0);
         }
+        // =======================================================
 
         // --- Chart & Render ---
         function renderCompChart(id, k, dA, dB, lA, lB) {
@@ -832,6 +854,4 @@
         function formatCurrency(n){return n.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});}
     </script>
 </body>
-
 </html>
-
