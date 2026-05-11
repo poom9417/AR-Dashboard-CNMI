@@ -452,6 +452,32 @@
             const filePath = DEFAULT_CSV_URL; 
             const overlay = document.getElementById('loading-overlay');
             const loadingText = document.getElementById('loading-text');
+	 
+	overlay.style.display = 'flex';
+            loadingText.textContent = 'กำลังพยายามโหลดข้อมูลไฟล์เริ่มต้น...';
+
+            Papa.parse(filePath, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.data && results.data.length > 0) {
+                        mainData = processCSVData(results.data); 
+                        currentData = [...mainData];
+                        updateTopStatusText(`เชื่อมต่อไฟล์: สำเร็จ`, false);
+                        initFilters(); 
+                        handleFilterChange();
+                        overlay.style.display = 'none';
+                    } else {
+                        console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูล ระบบจะใช้ข้อมูลจำลองแทน");
+                        loadMockDataFallback();
+                    }
+                },
+                error: function(err) {
+                    console.warn("ไม่สามารถดึงไฟล์ " + filePath + " ได้ (" + err.message + ") ระบบจะใช้ข้อมูลจำลองแทน");
+                    loadMockDataFallback();
+                }
+            });
 
             function loadMockDataFallback() {
                 loadingText.textContent = 'ไม่พบไฟล์ที่ระบุ (กำลังใช้ข้อมูลจำลองแทน)...';
