@@ -33,6 +33,11 @@
         .file-drop-area:hover { border-color: #3b82f6; background-color: #eff6ff; }
         .file-drop-area.dragover { border-color: #2563eb; background-color: #dbeafe; transform: scale(1.02); }
         
+        /* Decomposition Tree Styles - ปรับแต่งสำหรับแนวนอน */
+        .tree-scroll::-webkit-scrollbar { height: 10px; }
+        .tree-scroll::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 5px; }
+        .tree-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 5px; }
+        
         /* Table Styles */
         .table-pivot th, .table-pivot td { border: 1px solid #e2e8f0; padding: 10px; font-size: 0.85rem; }
         .table-pivot thead th { background-color: #f8fafc; font-weight: 600; text-align: center; color: #475569; position: sticky; top: 0; z-index: 10; }
@@ -95,6 +100,9 @@
         </div>
     </nav>
 
+    <!-- พื้นที่สำหรับแสดงกล่องแจ้งเตือน UI แทนการใช้ alert() -->
+    <div id="customNotification" class="hidden max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4 transition-all duration-300 z-40 relative"></div>
+
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         <!-- Filter Section -->
@@ -138,6 +146,21 @@
                 <div class="card border-l-4 border-orange-500 flex items-center justify-between">
                     <div><p class="text-sm text-gray-500 mb-1">สถานะสูงสุด</p><h3 class="text-lg font-bold text-slate-800 truncate w-40" id="kpi-top-status">-</h3><p class="text-xs text-gray-400" id="kpi-top-status-amt"></p></div>
                     <div class="stat-icon bg-orange-100 text-orange-600"><i class="fa-solid fa-tag text-xl"></i></div>
+                </div>
+            </section>
+
+            <!-- 📌 ส่วน Decomposition Tree (แนวนอน พร้อม Auto-Scale & Top 3) -->
+            <section class="mb-8">
+                <div class="card overflow-hidden">
+                    <h3 class="text-lg font-semibold mb-4 text-slate-700">
+                        <i class="fa-solid fa-sitemap text-indigo-500 mr-2"></i>เจาะลึกโครงสร้างยอดลูกหนี้ (Decomposition Tree)
+                    </h3>
+                    <p class="text-xs text-gray-500 mb-4">
+                        คลิกที่ <i class="fa-solid fa-circle-plus text-blue-500 mx-1"></i> เพื่อขยายดูข้อมูลย่อย 3 อันดับแรกทางด้านขวา (ยอดรวม > Remark > Status Group > Status Name > ปีงบประมาณ)
+                    </p>
+                    <div id="decomp-tree-root" class="overflow-x-auto tree-scroll text-sm pb-6 pl-2 min-h-[300px] flex items-center relative">
+                        <!-- โครงสร้าง Tree จะถูกสร้างด้วย JavaScript ที่นี่ -->
+                    </div>
                 </div>
             </section>
 
@@ -307,15 +330,9 @@
 
     <script>
         // =========================================================================
-        // 📌 ตั้งค่าลิงก์ไฟล์ CSV เริ่มต้นที่นี่
-        // =========================================================================
-        // หากคุณอัปโหลดไฟล์ CSV ไว้บนเว็บไซต์แล้ว ให้นำ URL หรือ ลิงก์ตรงมาใส่ในนี้
-        // ตัวอย่างเช่น: 'https://github.com/poom9417/AR-Dashboard-CNMI/blob/main/data_SAP_CNMI.csv'
-        // หรือถ้าอยู่บนเครื่อง ให้ใส่ชื่อไฟล์ไว้ตามเดิม เช่น 'data_SAP_CNMI.CSV'
-        const DEFAULT_CSV_URL = 'https://raw.githubusercontent.com/poom9417/AR-Dashboard-CNMI/main/data_SAP_CNMI.csv';
+        const DEFAULT_CSV_URL = 'data_SAP_CNMI.CSV';
         // =========================================================================
 
-        // Data Store
         let mainData = [];
         let currentData = [];
         let isComparisonMode = false;
@@ -326,12 +343,28 @@
         const COLOR_PALETTE = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6', '#f97316', '#06b6d4'];
         let charts = {}; 
 
-        // Filter Definitions
+        // 📌 ตัวแปรเก็บข้อมูลสำหรับสร้าง Decomposition Tree
+        let decompDataMap = {};
+        let decompIdCounter = 0;
+
         const filterKeys = ['fiscalYear', 'patientType', 'privilege', 'statusGroup', 'statusName', 'remark'];
         const filterLabels = {
             'fiscalYear': 'ปีงบประมาณ', 'patientType': 'ประเภทผู้ป่วย', 'privilege': 'สิทธิ', 
             'statusGroup': 'กลุ่มสถานะ', 'statusName': 'ชื่อสถานะ', 'remark': 'หมายเหตุ'
         };
+
+        // --- Utils: ฟังก์ชันจัดการตัวเลขให้ปลอดภัย ---
+        function formatNumber(n) {
+            let num = Number(n);
+            if (isNaN(num)) return "0";
+            return num.toLocaleString('th-TH', {minimumFractionDigits:0, maximumFractionDigits:2});
+        }
+        
+        function formatCurrency(n) {
+            let num = Number(n);
+            if (isNaN(num)) return "0.00";
+            return num.toLocaleString('th-TH', {minimumFractionDigits:2, maximumFractionDigits:2});
+        }
 
         window.onload = () => {
             if(window.ChartDataLabels) { Chart.register(ChartDataLabels); }
@@ -347,15 +380,41 @@
             const mainInput = document.getElementById('csvInput'); if (mainInput) mainInput.addEventListener('change', handleMainFileUpload);
 
             setupDragAndDrop('drop-zone-a', 'input-file-a', 'file-a-name'); setupDragAndDrop('drop-zone-b', 'input-file-b', 'file-b-name');
+            
+            // ให้ตรวจสอบการซูม Tree เมื่อเปลี่ยนขนาดหน้าต่างเบราว์เซอร์
+            window.addEventListener('resize', autoScaleTree);
         };
 
-        // ฟังก์ชันสร้าง Mock Data สำหรับใช้กรณีโหลดไฟล์ไม่ได้
+        // ฟังก์ชันสำหรับแสดงแจ้งเตือน UI
+        function showNotification(msg, type = 'warning') {
+            const notifEl = document.getElementById('customNotification');
+            if (!notifEl) return;
+            notifEl.classList.remove('hidden');
+            
+            let colors = type === 'error' ? 'bg-red-100 border-red-300 text-red-800' : 'bg-amber-100 border-amber-300 text-amber-800';
+            let icon = type === 'error' ? 'fa-circle-xmark' : 'fa-triangle-exclamation';
+            let title = type === 'error' ? 'ข้อผิดพลาด!' : 'แจ้งเตือน';
+            
+            notifEl.innerHTML = `
+                <div class="border ${colors} px-4 py-3 rounded-lg shadow-sm relative flex items-start" role="alert">
+                    <i class="fa-solid ${icon} text-xl mr-3 mt-0.5"></i>
+                    <div>
+                        <strong class="font-bold block mb-1">${title}</strong>
+                        <span class="block sm:inline text-sm">${msg}</span>
+                    </div>
+                    <button onclick="document.getElementById('customNotification').classList.add('hidden')" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700 transition-colors">
+                        <i class="fa-solid fa-times text-lg px-2"></i>
+                    </button>
+                </div>
+            `;
+        }
+
         function generateMockData(c) {
             const y = ['2567', '2568', '2569'];
             const t = ['OPD', 'IPD'];
             const p = ['GGO', 'LGO', 'ONHSI', 'Self Pay', 'ISSI'];
             const s = ['A01 : รายได้เข้าไม่ครบ', 'A35 : ค่ารักษาพยาบาลเข้ามาหลังเรียกเก็บ', 'Z06 : รายได้ทับซ้อน IPD/OPD', 'B01 : อื่นๆ', 'Pending'];
-            const remarks = ['ปกติ', 'เร่งด่วน', 'รอตรวจสอบ', 'อยู่ระหว่างประมวลผล'];
+            const remarks = ['ปกติ', 'เร่งด่วน', 'รอตรวจสอบ', 'อยู่ระหว่างประมวลผล', 'ไม่สมบูรณ์', 'ติดปัญหา', 'รอเอกสาร'];
             
             let d = [];
             for(let i=0; i<c; i++) {
@@ -364,14 +423,10 @@
                 if (status === 'Pending' && year === '2567') status = 'A01 : รายได้เข้าไม่ครบ'; 
                 
                 d.push({ 
-                    fiscalYear: year, 
-                    patientType: t[i%2], 
-                    privilege: p[i%5], 
+                    fiscalYear: year, patientType: t[i%2], privilege: p[i%5], 
                     statusGroup: status === 'Pending' ? 'ค้างชำระ (Pending)' : 'ปิดบัญชีแล้ว', 
-                    statusName: status, 
-                    remark: remarks[Math.floor(Math.random() * remarks.length)], 
-                    amount: Math.floor(Math.random()*50000) + 1000,
-                    count: 1
+                    statusName: status, remark: remarks[Math.floor(Math.random() * remarks.length)], 
+                    amount: Math.floor(Math.random()*50000) + 1000, count: 1
                 });
             }
             return d;
@@ -390,47 +445,58 @@
 
         function loadInitialData() {
             const filePath = DEFAULT_CSV_URL; 
-            
             const overlay = document.getElementById('loading-overlay');
             const loadingText = document.getElementById('loading-text');
 
-            overlay.style.display = 'flex';
-            loadingText.textContent = 'กำลังพยายามโหลดข้อมูลไฟล์เริ่มต้น...';
-
-            Papa.parse(filePath, {
-                download: true,
-                header: true,
-                skipEmptyLines: true,
-                complete: (results) => {
-                    if (results.data && results.data.length > 0) {
-                        mainData = processCSVData(results.data); 
-                        currentData = [...mainData];
-                        updateTopStatusText(`เชื่อมต่อไฟล์: สำเร็จ`, false);
-                        initFilters(); 
-                        handleFilterChange();
-                        overlay.style.display = 'none';
-                    } else {
-                        console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูล ระบบจะใช้ข้อมูลจำลองแทน");
-                        loadMockDataFallback();
-                    }
-                },
-                error: function(err) {
-                    console.warn("ไม่สามารถดึงไฟล์ " + filePath + " ได้ (" + err.message + ") ระบบจะใช้ข้อมูลจำลองแทน");
-                    loadMockDataFallback();
-                }
-            });
-
-            // ฟังก์ชันโหลดข้อมูลจำลอง
             function loadMockDataFallback() {
                 loadingText.textContent = 'ไม่พบไฟล์ที่ระบุ (กำลังใช้ข้อมูลจำลองแทน)...';
                 setTimeout(() => {
-                    mainData = generateMockData(500); // สร้างข้อมูลจำลอง 500 รายการ
+                    mainData = generateMockData(500); 
                     currentData = [...mainData];
                     updateTopStatusText('ใช้ข้อมูลจำลอง (ไม่ได้ระบุลิงก์ไฟล์)', true);
-                    initFilters();
-                    handleFilterChange();
+                    initFilters(); handleFilterChange();
                     overlay.style.display = 'none';
                 }, 500);
+            }
+
+            try {
+                if (window.location.protocol === 'file:' || window.location.protocol === 'blob:' || window.location.protocol === 'data:') {
+                    console.warn("รันบน Local หรือ Preview ข้ามการโหลดไฟล์อัตโนมัติเพื่อป้องกัน Error");
+                    loadMockDataFallback();
+                    return; 
+                }
+
+                overlay.style.display = 'flex'; 
+                loadingText.textContent = 'กำลังพยายามโหลดข้อมูลไฟล์เริ่มต้น...';
+
+                Papa.parse(filePath, {
+                    download: true, header: true, skipEmptyLines: true,
+                    complete: (results) => {
+                        try {
+                            if (results.data && results.data.length > 0) {
+                                mainData = processCSVData(results.data); 
+                                currentData = [...mainData];
+                                updateTopStatusText(`เชื่อมต่อไฟล์: สำเร็จ`, false);
+                                initFilters(); handleFilterChange();
+                            } else {
+                                console.warn("โหลดสำเร็จ แต่ไม่พบข้อมูล ระบบจะใช้ข้อมูลจำลองแทน");
+                                loadMockDataFallback();
+                            }
+                        } catch (e) {
+                            console.error("ประมวลผลข้อมูลผิดพลาด:", e);
+                            loadMockDataFallback();
+                        } finally {
+                            overlay.style.display = 'none'; 
+                        }
+                    },
+                    error: function(err) {
+                        console.warn("ไม่สามารถดึงไฟล์ " + filePath + " ได้ (" + err.message + ") ระบบจะใช้ข้อมูลจำลองแทน");
+                        loadMockDataFallback();
+                    }
+                });
+            } catch (err) {
+                console.warn("เกิดข้อผิดพลาดฉุกเฉินตอนโหลดข้อมูล:", err);
+                loadMockDataFallback();
             }
         }
 
@@ -441,24 +507,18 @@
 
             ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => { dropZone.addEventListener(eventName, preventDefaults, false); });
             function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
-
             ['dragenter', 'dragover'].forEach(eventName => { dropZone.addEventListener(eventName, () => { dropZone.classList.add('dragover'); }, false); });
             ['dragleave', 'drop'].forEach(eventName => { dropZone.addEventListener(eventName, () => { dropZone.classList.remove('dragover'); }, false); });
-
             dropZone.addEventListener('drop', (e) => {
                 const dt = e.dataTransfer; const files = dt.files;
                 if(files && files.length > 0) { input.files = files; updateFileName(input, labelId); }
             }, false);
         }
 
-        // --- Core UI Functions ---
         function toggleMode() {
             isComparisonMode = !isComparisonMode;
             const btn = document.getElementById('btn-toggle-mode');
-            const viewStd = document.getElementById('view-standard');
-            const viewComp = document.getElementById('view-comparison');
-            const filters = document.getElementById('common-filters');
-
+            const viewStd = document.getElementById('view-standard'), viewComp = document.getElementById('view-comparison'), filters = document.getElementById('common-filters');
             if (isComparisonMode) {
                 btn.innerHTML = '<i class="fa-solid fa-arrow-left mr-2"></i> กลับสู่หน้าหลัก';
                 btn.className = "bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center";
@@ -474,8 +534,7 @@
         }
 
         function resetComparison() {
-            document.getElementById('comp-step-select').classList.remove('hidden');
-            document.getElementById('comp-step-result').classList.add('hidden');
+            document.getElementById('comp-step-select').classList.remove('hidden'); document.getElementById('comp-step-result').classList.add('hidden');
             document.getElementById('common-filters').classList.add('hidden');
             document.getElementById('input-file-a').value = ''; document.getElementById('input-file-b').value = '';
             document.getElementById('file-a-name').textContent = 'ยังไม่ได้เลือกไฟล์'; document.getElementById('file-b-name').textContent = 'ยังไม่ได้เลือกไฟล์';
@@ -491,18 +550,12 @@
         async function startComparison() {
             const inputA = document.getElementById('input-file-a'), inputB = document.getElementById('input-file-b');
             if (!inputA.files[0] || !inputB.files[0]) { alert("กรุณาเลือกไฟล์ทั้งสองครับ (A และ B)"); return; }
-            
             const overlay = document.getElementById('loading-overlay'); overlay.style.display = 'flex';
             try {
                 const [resA, resB] = await Promise.all([readCSVFile(inputA.files[0]), readCSVFile(inputB.files[0])]);
                 compDataA = { name: inputA.files[0].name, data: resA }; compDataB = { name: inputB.files[0].name, data: resB };
-                populateFilters([...resA, ...resB]); 
-                renderComparisonResult();
-                updateDynamicFilters(getFilterValues(), [...resA, ...resB]);
-
-                document.getElementById('comp-step-select').classList.add('hidden');
-                document.getElementById('comp-step-result').classList.remove('hidden');
-                document.getElementById('common-filters').classList.remove('hidden');
+                populateFilters([...resA, ...resB]); renderComparisonResult(); updateDynamicFilters(getFilterValues(), [...resA, ...resB]);
+                document.getElementById('comp-step-select').classList.add('hidden'); document.getElementById('comp-step-result').classList.remove('hidden'); document.getElementById('common-filters').classList.remove('hidden');
             } catch (err) { alert("เกิดข้อผิดพลาด: " + err.message); } finally { overlay.style.display = 'none'; }
         }
 
@@ -616,19 +669,20 @@
             Papa.parse(file, {
                 header: true, skipEmptyLines: true,
                 complete: (results) => {
-                    if (results.data.length > 0) {
-                        mainData = processCSVData(results.data); 
-                        currentData = [...mainData];
-                        const ut = document.getElementById('update-time');
-                        if (ut) { 
-                            ut.classList.remove('hidden'); 
-                            ut.innerHTML = `<span class="text-green-600 font-bold"><i class="fa-solid fa-circle text-[8px] mr-1 align-middle"></i>อัปโหลดไฟล์: ${file.name}</span>`; 
+                    try {
+                        if (results.data && results.data.length > 0) {
+                            mainData = processCSVData(results.data); 
+                            currentData = [...mainData];
+                            updateTopStatusText(`อัปโหลดไฟล์: ${file.name}`, false);
+                            initFilters(); handleFilterChange();
+                        } else {
+                            alert("คำเตือน: โหลดไฟล์สำเร็จ แต่ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง");
                         }
-                        initFilters(); handleFilterChange();
-                    } else {
-                        alert("คำเตือน: โหลดไฟล์สำเร็จ แต่ไม่พบข้อมูล หรือรูปแบบคอลัมน์ไม่ถูกต้อง");
+                    } catch (e) {
+                        alert("เกิดข้อผิดพลาดในการประมวลผลข้อมูล: " + e.message);
+                    } finally {
+                        overlay.style.display = 'none';
                     }
-                    overlay.style.display = 'none';
                 },
                 error: function(err) {
                     alert("เกิดข้อผิดพลาดในการอ่านไฟล์: " + err.message);
@@ -641,39 +695,24 @@
             return new Promise((resolve) => Papa.parse(file, { header: true, skipEmptyLines: true, complete: (r) => resolve(r.data.length ? processCSVData(r.data) : []) }));
         }
 
-        // =======================================================
-        // 📌 จุดแก้ไขเรื่องปี พ.ศ. อยู่ที่นี่ครับ
-        // =======================================================
         function processCSVData(rawData) {
             const keys = { fy: ['FYDDate','ปีงบประมาณ','Year'], pt: ['Ref.key 1','ประเภทผู้ป่วย'], pv: ['Ref.key 2','สิทธิ'], sg: ['Status Name Group'], sn: ['Status Name'], rm: ['Remark'], amt: ['Amount','จำนวนเงิน'], cnt: ['count','Count'] };
             const getVal = (r, kList) => { for(let k of kList) if(r[k]!==undefined) return r[k]; return '-'; };
-            
-            // ฟังก์ชันแปลงปีเป็น พ.ศ.
             const parseYearToBE = (v) => { 
                 if(!v || v==='-') return '-'; 
-                let str = String(v);
-                if(str.includes('/')) str = str.split('/').find(s=>s.length===4)||str; 
-                
-                let num = parseInt(str, 10);
-                // เช็คว่าเป็นตัวเลข ค.ศ. หรือไม่ (ปกติ ค.ศ. จะอยู่ในช่วง 1900 - 2400)
-                // ถ้าใช่ ให้บวก 543 ทันที
-                if (!isNaN(num) && num > 1900 && num < 2400) {
-                    return String(num + 543);
-                }
-                
+                let str = String(v); if(str.includes('/')) str = str.split('/').find(s=>s.length===4)||str; 
+                let num = parseInt(str, 10); if (!isNaN(num) && num > 1900 && num < 2400) return String(num + 543);
                 return str; 
             };
             
             let processed = rawData.map(r => ({
-                fiscalYear: parseYearToBE(getVal(r, keys.fy)), // ใช้ฟังก์ชันใหม่ตรงนี้
-                patientType: getVal(r, keys.pt), privilege: getVal(r, keys.pv),
+                fiscalYear: parseYearToBE(getVal(r, keys.fy)), patientType: getVal(r, keys.pt), privilege: getVal(r, keys.pv),
                 statusGroup: getVal(r, keys.sg), statusName: getVal(r, keys.sn), remark: getVal(r, keys.rm),
                 amount: parseFloat(String(getVal(r, keys.amt)).replace(/,/g,''))||0, count: parseFloat(String(getVal(r, keys.cnt)).replace(/,/g,''))||1
             }));
             
             return processed.filter(item => item.fiscalYear !== '-' || item.patientType !== '-' || item.amount !== 0);
         }
-        // =======================================================
 
         // --- Chart & Render ---
         function renderCompChart(id, k, dA, dB, lA, lB) {
@@ -686,31 +725,214 @@
 
         function renderStdChart(id, t, d, c, opts={}) {
             if(charts[id]) charts[id].destroy(); const ctx=document.getElementById(id).getContext('2d');
-            
             if (!d || d.length === 0) {
-                charts[id] = new Chart(ctx, { 
-                    type: 'bar', 
-                    data: { labels: ['ไม่มีข้อมูล'], datasets: [{ data: [0], backgroundColor: '#e2e8f0' }] }, 
-                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { y: { display: false }, x: { display: false } } } 
-                });
-                return;
+                charts[id] = new Chart(ctx, { type: 'bar', data: { labels: ['ไม่มีข้อมูล'], datasets: [{ data: [0], backgroundColor: '#e2e8f0' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: false } }, scales: { y: { display: false }, x: { display: false } } } }); return;
             }
-
             charts[id]=new Chart(ctx,{type:t,data:{labels:d.map(x=>x[0]),datasets:[{label:'ยอดลูกหนี้',data:d.map(x=>x[1]),backgroundColor:c,borderWidth:1}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:t!=='bar'},datalabels:{display:false}},...opts}});
         }
         
         function renderDashboard() {
-            updateKPIs();
+            try { updateKPIs(); } catch (e) { console.error("Error KPIs:", e); }
+            
             const agg=(k)=>{const r={};currentData.forEach(i=>r[i[k]]=(r[i[k]]||0)+i.amount);return Object.entries(r).sort((a,b)=>b[1]-a[1]);};
-            renderStdChart('chartPrivilege','bar',agg('privilege').slice(0,5),'#3b82f6');
-            renderStdChart('chartStatusGroup','doughnut',agg('statusGroup'),COLOR_PALETTE);
-            renderStdChart('chartYear', 'bar', agg('fiscalYear').sort().reverse(), '#8b5cf6', { layout: { padding: { top: 40 } }, plugins: { legend: { display: false }, datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v) => formatCurrency(v), font: { weight: 'bold' }, color: '#6b21a8' } } });
-            renderPivotTable(); 
-            renderMainStatusTable();
+            
+            try { renderDecompTree(); } catch (e) { console.error("Error DecompTree:", e); }
+
+            try { renderStdChart('chartPrivilege','bar',agg('privilege').slice(0,5),'#3b82f6'); } catch (e) { console.error("Error chartPrivilege:", e); }
+            try { renderStdChart('chartStatusGroup','doughnut',agg('statusGroup'),COLOR_PALETTE); } catch (e) { console.error("Error chartStatusGroup:", e); }
+            try { 
+                renderStdChart('chartYear', 'bar', agg('fiscalYear').sort().reverse(), '#8b5cf6', { 
+                    layout: { padding: { top: 40 } }, 
+                    plugins: { 
+                        legend: { display: false }, 
+                        datalabels: { display: true, anchor: 'end', align: 'top', formatter: (v) => formatCurrency(v), font: { weight: 'bold' }, color: '#6b21a8' } 
+                    } 
+                }); 
+            } catch (e) { console.error("Error chartYear:", e); }
+
+            try { renderPivotTable(); } catch (e) { console.error("Error PivotTable:", e); }
+            try { renderMainStatusTable(); } catch (e) { console.error("Error MainStatusTable:", e); }
         }
 
+        // =========================================================================
+        // 📌 ฟังก์ชันสร้าง Decomposition Tree (แนวนอน ซ้ายไปขวา) + Auto Scale
+        // =========================================================================
+        function autoScaleTree() {
+            setTimeout(() => {
+                const container = document.getElementById('decomp-tree-root');
+                const wrapper = document.getElementById('decomp-tree-wrapper');
+                if (!container || !wrapper) return;
+                
+                const containerWidth = container.clientWidth - 40;
+                const contentWidth = wrapper.scrollWidth;
+                
+                if (contentWidth > containerWidth) {
+                    let scale = containerWidth / contentWidth;
+                    if (scale < 0.5) scale = 0.5; 
+                    wrapper.style.transform = `scale(${scale})`;
+                } else {
+                    wrapper.style.transform = `scale(1)`;
+                }
+            }, 50); 
+        }
+
+        function renderDecompTree() {
+            decompDataMap = {}; 
+            decompIdCounter = 0;
+            
+            const container = document.getElementById('decomp-tree-root');
+            if (currentData.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-6">ไม่มีข้อมูลสำหรับแสดงโครงสร้าง</p>';
+                return;
+            }
+
+            const totalAmount = currentData.reduce((s, i) => s + i.amount, 0);
+
+            let html = `
+                <div id="decomp-tree-wrapper" class="flex flex-row w-max py-4 items-stretch origin-left transition-transform duration-300 ease-in-out">
+                    <div class="bg-indigo-600 text-white border border-indigo-700 rounded-xl p-5 shadow-lg shrink-0 w-72 relative z-10 self-center">
+                        <div class="text-xs text-indigo-200 font-medium mb-1">ยอดรวมทั้งหมด (Total Amount)</div>
+                        <div class="text-2xl font-bold text-white mb-2">${formatCurrency(totalAmount)} <span class="text-sm font-normal">บาท</span></div>
+                        <div class="text-xs text-indigo-100"><i class="fa-solid fa-list mr-1"></i>จำนวน ${formatNumber(currentData.reduce((s, i) => s + i.count, 0))} รายการ</div>
+                        <div class="absolute -right-10 top-1/2 w-10 border-t-2 border-slate-300 border-dashed -z-10"></div>
+                    </div>
+                    <div class="flex flex-col justify-center relative ml-10 border-l-2 border-slate-300 border-dashed my-2" id="decomp-root-children"></div>
+                </div>
+            `;
+            container.innerHTML = html;
+
+            renderDecompNodes(currentData, 'remark', 'decomp-root-children', totalAmount, ['statusGroup', 'statusName', 'fiscalYear']);
+            
+            autoScaleTree();
+        }
+
+        function renderDecompNodes(data, groupKey, parentId, parentTotal, nextKeys) {
+            const parent = document.getElementById(parentId);
+            if (!parent) return;
+
+            const groups = {};
+            data.forEach(item => {
+                const k = item[groupKey] || 'ไม่ระบุ';
+                if (!groups[k]) groups[k] = { amount: 0, items: [] };
+                groups[k].amount += item.amount;
+                groups[k].items.push(item);
+            });
+
+            const sortedKeys = Object.keys(groups).sort((a, b) => groups[b].amount - groups[a].amount);
+            
+            let displayGroups = [];
+            if (sortedKeys.length > 3) {
+                for (let i = 0; i < 3; i++) {
+                    displayGroups.push({ key: sortedKeys[i], ...groups[sortedKeys[i]] });
+                }
+                let othersAmount = 0;
+                let othersCount = 0;
+                let othersItems = [];
+                for (let i = 3; i < sortedKeys.length; i++) {
+                    othersAmount += groups[sortedKeys[i]].amount;
+                    othersItems = othersItems.concat(groups[sortedKeys[i]].items);
+                    othersCount += 1;
+                }
+                if (othersAmount > 0) {
+                    displayGroups.push({ key: `อื่นๆ (${othersCount} รายการ)`, amount: othersAmount, items: othersItems });
+                }
+            } else {
+                displayGroups = sortedKeys.map(k => ({ key: k, ...groups[k] }));
+            }
+
+            displayGroups.forEach((groupData) => {
+                const key = groupData.key;
+                const keyStr = String(key); 
+                const gTotal = groupData.amount;
+                const groupItems = groupData.items;
+
+                const pct = parentTotal > 0 ? ((gTotal / parentTotal) * 100).toFixed(1) : 0;
+                const childId = `decomp-node-${decompIdCounter++}`;
+                const rightConnId = `right-conn-${childId}`;
+                const hasNext = nextKeys.length > 0;
+                
+                decompDataMap[childId] = {
+                    data: groupItems,
+                    nextKeys: [...nextKeys],
+                    total: gTotal
+                };
+
+                let titleLabel = groupKey === 'remark' ? 'Remark' : 
+                                 groupKey === 'statusGroup' ? 'Status Group' : 
+                                 groupKey === 'statusName' ? 'Status Name' : 'ปีงบประมาณ';
+
+                const nodeWrapper = document.createElement('div');
+                nodeWrapper.className = 'flex flex-row relative py-2 items-stretch';
+                
+                const nodeDiv = document.createElement('div');
+                nodeDiv.className = `decomp-node bg-white border border-slate-200 rounded-xl p-4 shrink-0 w-72 shadow-sm relative z-10 ml-10 self-center transition-all ${hasNext ? 'hover:border-blue-400 hover:shadow-md cursor-pointer' : ''}`;
+                
+                nodeDiv.innerHTML = `
+                    <div class="absolute -left-10 top-1/2 w-10 border-t-2 border-slate-300 border-dashed -z-10"></div>
+                    ${hasNext ? `<div id="${rightConnId}" class="absolute -right-10 top-1/2 w-10 border-t-2 border-slate-300 border-dashed -z-10 hidden"></div>` : ''}
+                    
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex flex-col">
+                            <span class="text-[10px] text-gray-500 font-bold uppercase tracking-wider">${titleLabel}</span>
+                            <span class="text-sm font-bold text-blue-800 truncate w-48 mt-0.5" title="${keyStr}">${keyStr}</span>
+                        </div>
+                        ${hasNext ? `<span class="text-lg text-gray-300 toggle-icon transition-colors"><i class="fa-solid fa-circle-plus hover:text-blue-500"></i></span>` : ''}
+                    </div>
+                    
+                    <div class="flex justify-between items-end mb-1.5 mt-3">
+                        <span class="text-lg font-extrabold text-slate-700">${formatCurrency(gTotal)}</span>
+                        <span class="text-xs font-bold ${pct > 50 ? 'text-red-500' : 'text-slate-500'} bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">${pct}%</span>
+                    </div>
+                    <div class="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div class="h-full ${keyStr.includes('อื่นๆ') ? 'bg-slate-400' : 'bg-blue-500'} rounded-full" style="width: ${pct}%"></div>
+                    </div>
+                `;
+
+                const childrenDiv = document.createElement('div');
+                childrenDiv.id = childId;
+                childrenDiv.className = 'hidden flex flex-col justify-center relative ml-10 border-l-2 border-slate-300 border-dashed my-2';
+
+                if (hasNext) {
+                    nodeDiv.onclick = (e) => {
+                        const isHidden = childrenDiv.classList.contains('hidden');
+                        const iconBtn = nodeDiv.querySelector('.toggle-icon');
+                        const rightConn = document.getElementById(rightConnId);
+                        
+                        if (isHidden) {
+                            childrenDiv.classList.remove('hidden');
+                            rightConn.classList.remove('hidden');
+                            nodeDiv.classList.add('border-blue-400', 'shadow-md', 'ring-1', 'ring-blue-100');
+                            iconBtn.innerHTML = '<i class="fa-solid fa-circle-minus text-orange-500 text-lg"></i>';
+                            
+                            if (childrenDiv.innerHTML === '') {
+                                const nodeInfo = decompDataMap[childId];
+                                const currentKey = nodeInfo.nextKeys[0];
+                                const remainingKeys = nodeInfo.nextKeys.slice(1);
+                                renderDecompNodes(nodeInfo.data, currentKey, childId, nodeInfo.total, remainingKeys);
+                            }
+                        } else {
+                            childrenDiv.classList.add('hidden');
+                            rightConn.classList.add('hidden');
+                            nodeDiv.classList.remove('border-blue-400', 'shadow-md', 'ring-1', 'ring-blue-100');
+                            iconBtn.innerHTML = '<i class="fa-solid fa-circle-plus hover:text-blue-500 text-lg"></i>';
+                        }
+                        
+                        autoScaleTree();
+                    };
+                }
+
+                nodeWrapper.appendChild(nodeDiv);
+                nodeWrapper.appendChild(childrenDiv);
+                parent.appendChild(nodeWrapper);
+            });
+        }
+
+        // =========================================================================
+        // 📌 ฟังก์ชันสร้างตาราง (ได้รับการปกป้องด้วย Try-Catch แล้ว)
+        // =========================================================================
         function renderPivotTable() {
             const tbody = document.getElementById('table-body-pivot'), thead = document.getElementById('table-head-pivot');
+            if(!tbody || !thead) return;
             tbody.innerHTML = ''; thead.innerHTML = '';
 
             const years = [...new Set(currentData.map(d => d.fiscalYear))].sort().reverse();
@@ -722,36 +944,60 @@
 
             const tree = {}; const remarkTotals = {};
             currentData.forEach(item => {
-                const r = item.remark || '-'; const n = item.statusName || '-'; const y = item.fiscalYear || '-'; const amt = item.amount;
-                if(!tree[r]) tree[r] = {}; if(!tree[r][n]) tree[r][n] = {};
+                const r = String(item.remark || '-'); 
+                const n = String(item.statusName || '-'); 
+                const y = String(item.fiscalYear || '-'); 
+                const amt = item.amount || 0;
+                
+                if(!tree[r]) tree[r] = {}; 
+                if(!tree[r][n]) tree[r][n] = {};
                 tree[r][n][y] = (tree[r][n][y] || 0) + amt;
-                if(!remarkTotals[r]) remarkTotals[r] = {}; remarkTotals[r][y] = (remarkTotals[r][y] || 0) + amt;
+                
+                if(!remarkTotals[r]) remarkTotals[r] = {}; 
+                remarkTotals[r][y] = (remarkTotals[r][y] || 0) + amt;
             });
 
             let headHtml = '<tr><th class="px-4 py-2 bg-slate-100 border text-left w-1/3">รายละเอียด (Remark > Status Name)</th>';
             years.forEach(y => headHtml += `<th class="px-4 py-2 bg-slate-100 border text-right">${y}</th>`);
-            headHtml += '<th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>'; thead.innerHTML = headHtml;
+            headHtml += '<th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>'; 
+            thead.innerHTML = headHtml;
 
             Object.keys(tree).sort().forEach(remark => {
                 let trHeader = document.createElement('tr'); trHeader.className = 'row-remark-header';
-                trHeader.innerHTML = `<td class="px-4 py-2 border" colspan="${years.length + 2}">${remark}</td>`; tbody.appendChild(trHeader);
+                trHeader.innerHTML = `<td class="px-4 py-2 border" colspan="${years.length + 2}">${remark}</td>`; 
+                tbody.appendChild(trHeader);
 
                 Object.keys(tree[remark]).sort().forEach(name => {
                     let trN = document.createElement('tr'); trN.className = 'hover:bg-gray-50';
-                    let nHtml = `<td class="px-4 py-2 border pl-8 text-sm text-gray-700">${name}</td>`; let grandTotalN = 0;
-                    years.forEach(y => { const val = tree[remark][name][y] || 0; grandTotalN += val; nHtml += `<td class="px-4 py-2 border text-right text-sm">${val !== 0 ? formatCurrency(val) : '-'}</td>`; });
-                    nHtml += `<td class="px-4 py-2 border text-right text-sm font-semibold">${formatCurrency(grandTotalN)}</td>`; trN.innerHTML = nHtml; tbody.appendChild(trN);
+                    let nHtml = `<td class="px-4 py-2 border pl-8 text-sm text-gray-700">${name}</td>`; 
+                    let grandTotalN = 0;
+                    years.forEach(y => { 
+                        const val = tree[remark][name][y] || 0; 
+                        grandTotalN += val; 
+                        nHtml += `<td class="px-4 py-2 border text-right text-sm">${val !== 0 ? formatCurrency(val) : '-'}</td>`; 
+                    });
+                    nHtml += `<td class="px-4 py-2 border text-right text-sm font-semibold">${formatCurrency(grandTotalN)}</td>`; 
+                    trN.innerHTML = nHtml; 
+                    tbody.appendChild(trN);
                 });
 
                 let trR = document.createElement('tr'); trR.className = 'row-remark-total';
-                let rowHtml = `<td class="px-4 py-2 border text-right">รวม (${remark})</td>`; let grandTotalR = 0;
-                years.forEach(y => { const val = remarkTotals[remark][y] || 0; grandTotalR += val; rowHtml += `<td class="px-4 py-2 border text-right">${formatCurrency(val)}</td>`; });
-                rowHtml += `<td class="px-4 py-2 border text-right bg-blue-100">${formatCurrency(grandTotalR)}</td>`; trR.innerHTML = rowHtml; tbody.appendChild(trR);
+                let rowHtml = `<td class="px-4 py-2 border text-right">รวม (${remark})</td>`; 
+                let grandTotalR = 0;
+                years.forEach(y => { 
+                    const val = remarkTotals[remark][y] || 0; 
+                    grandTotalR += val; 
+                    rowHtml += `<td class="px-4 py-2 border text-right">${formatCurrency(val)}</td>`; 
+                });
+                rowHtml += `<td class="px-4 py-2 border text-right bg-blue-100">${formatCurrency(grandTotalR)}</td>`; 
+                trR.innerHTML = rowHtml; 
+                tbody.appendChild(trR);
             });
         }
 
         function renderMainStatusTable() {
             const tbody = document.getElementById('table-body-main-status'), thead = document.getElementById('table-head-main-status');
+            if(!tbody || !thead) return;
             tbody.innerHTML = ''; thead.innerHTML = '';
             
             thead.innerHTML = `<tr><th class="px-4 py-2 bg-slate-100 border text-left w-1/3">สถานะหลัก</th><th class="px-4 py-2 bg-slate-100 border text-right">2569</th><th class="px-4 py-2 bg-slate-100 border text-right">2568</th><th class="px-4 py-2 bg-slate-100 border text-right">ก่อน 2568</th><th class="px-4 py-2 bg-slate-200 border text-right">รวมทั้งหมด</th></tr>`;
@@ -766,11 +1012,21 @@
             const grandTotals = { '2569': 0, '2568': 0, 'Pre': 0, 'Total': 0 };
 
             currentData.forEach(item => {
-                const status = item.statusName || ''; let year = parseInt(item.fiscalYear); if (isNaN(year)) year = 0; const amt = item.amount;
-                let key = 'Others'; for (const [catKey, catDef] of Object.entries(categories)) { if (catKey !== 'Others' && catDef.filter(status)) { key = catKey; break; } }
-                if (year === 2569 || year === 2026) { groupedData[key]['2569'] += amt; grandTotals['2569'] += amt; } else if (year === 2568 || year === 2025) { groupedData[key]['2568'] += amt; grandTotals['2568'] += amt; } else if ((year > 0 && year < 2568 && year > 2400) || (year < 2025 && year > 0)) { groupedData[key]['Pre'] += amt; grandTotals['Pre'] += amt; }
+                const status = String(item.statusName || ''); 
+                let year = parseInt(item.fiscalYear); if (isNaN(year)) year = 0; const amt = item.amount || 0;
+                
+                let key = 'Others'; 
+                for (const [catKey, catDef] of Object.entries(categories)) { 
+                    if (catKey !== 'Others' && catDef.filter(status)) { key = catKey; break; } 
+                }
+                
+                if (year === 2569 || year === 2026) { groupedData[key]['2569'] += amt; grandTotals['2569'] += amt; } 
+                else if (year === 2568 || year === 2025) { groupedData[key]['2568'] += amt; grandTotals['2568'] += amt; } 
+                else if ((year > 0 && year < 2568 && year > 2400) || (year < 2025 && year > 0)) { groupedData[key]['Pre'] += amt; grandTotals['Pre'] += amt; }
+                
                 groupedData[key]['Total'] = groupedData[key]['2569'] + groupedData[key]['2568'] + groupedData[key]['Pre'];
             });
+            
             grandTotals['Total'] = grandTotals['2569'] + grandTotals['2568'] + grandTotals['Pre'];
 
             Object.keys(categories).forEach(key => {
@@ -852,9 +1108,6 @@
             else { currentData=[...mainData]; renderDashboard(); updateDynamicFilters(getFilterValues(), mainData); }
             renderActiveTags(getFilterValues());
         }
-
-        function formatNumber(n){return n.toLocaleString('th-TH',{minimumFractionDigits:0,maximumFractionDigits:2});}
-        function formatCurrency(n){return n.toLocaleString('th-TH',{minimumFractionDigits:2,maximumFractionDigits:2});}
     </script>
 </body>
 </html>
